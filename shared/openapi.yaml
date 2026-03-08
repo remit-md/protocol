@@ -1,0 +1,696 @@
+openapi: "3.1.0"
+info:
+  title: remit.md API
+  version: "0.1.0"
+  description: Universal payment protocol for AI agents using USDC on EVM L2 chains
+
+servers:
+  - url: https://api.remit.md/api/v0
+    description: Production (Base mainnet)
+  - url: https://testnet.remit.md/api/v0
+    description: Testnet (Base Sepolia)
+  - url: http://localhost:3000/api/v0
+    description: Local development
+
+security:
+  - EIP712Auth: []
+
+components:
+  securitySchemes:
+    EIP712Auth:
+      type: apiKey
+      in: header
+      name: X-Remit-Signature
+      description: EIP-712 signature over request body
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    WalletParam:
+      name: wallet
+      in: path
+      required: true
+      schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, default: 20, maximum: 100 }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, default: 0 }
+
+  schemas:
+    Address:
+      type: string
+      pattern: "^0x[0-9a-fA-F]{40}$"
+      example: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+
+    UsdcAmount:
+      type: string
+      description: "USDC amount as decimal string (e.g. 10.500000)"
+      example: "10.500000"
+
+    Invoice:
+      type: object
+      required: [id, chain, from_agent, to_agent, amount, type, task, fee_paid_by, signature, protocol_version, nonce]
+      properties:
+        id:               { type: string }
+        chain:            { type: string, example: "base" }
+        from_agent:       { $ref: "#/components/schemas/Address" }
+        to_agent:         { $ref: "#/components/schemas/Address" }
+        amount:           { type: number, minimum: 0.01 }
+        type:             { type: string, enum: [direct, escrow, metered, streaming, subscription, bounty, deposit] }
+        task:             { type: string }
+        evidence_uri:     { type: string }
+        escrow_timeout:   { type: integer, description: seconds }
+        fee_paid_by:      { type: string, enum: [payer, payee, split] }
+        milestones:       { type: array, items: { $ref: "#/components/schemas/Milestone" } }
+        splits:           { type: array, items: { $ref: "#/components/schemas/Split" } }
+        signature:        { type: string }
+        protocol_version: { type: string, default: "0.1.0" }
+        nonce:            { type: string }
+
+    Milestone:
+      type: object
+      required: [milestone_id, description, amount, timeout]
+      properties:
+        milestone_id: { type: string }
+        description:  { type: string }
+        amount:       { type: number }
+        evidence_uri: { type: string }
+        timeout:      { type: integer, description: seconds }
+        status:       { type: string, enum: [pending, submitted, released, disputed] }
+
+    Split:
+      type: object
+      required: [agent, amount, task]
+      properties:
+        agent:        { $ref: "#/components/schemas/Address" }
+        amount:       { type: number }
+        task:         { type: string }
+        evidence_uri: { type: string }
+
+    Escrow:
+      type: object
+      properties:
+        invoice_id:    { type: string }
+        chain:         { type: string }
+        tx_hash:       { type: string }
+        status:        { type: string, enum: [funded, active, completed, disputed, cancelled, timed_out] }
+        payer:         { $ref: "#/components/schemas/Address" }
+        payee:         { $ref: "#/components/schemas/Address" }
+        amount:        { $ref: "#/components/schemas/UsdcAmount" }
+        fee:           { $ref: "#/components/schemas/UsdcAmount" }
+        timeout:       { type: string, format: date-time }
+        claim_started: { type: boolean }
+        milestones:    { type: array, items: { $ref: "#/components/schemas/Milestone" } }
+        created_at:    { type: string, format: date-time }
+
+    Tab:
+      type: object
+      properties:
+        id:            { type: string }
+        payer:         { $ref: "#/components/schemas/Address" }
+        provider:      { $ref: "#/components/schemas/Address" }
+        limit:         { $ref: "#/components/schemas/UsdcAmount" }
+        per_unit:      { $ref: "#/components/schemas/UsdcAmount" }
+        total_charged: { $ref: "#/components/schemas/UsdcAmount" }
+        call_count:    { type: integer }
+        status:        { type: string, enum: [open, depleted, closed, expired] }
+        expiry:        { type: string, format: date-time }
+
+    Stream:
+      type: object
+      properties:
+        id:              { type: string }
+        payer:           { $ref: "#/components/schemas/Address" }
+        payee:           { $ref: "#/components/schemas/Address" }
+        rate_per_second: { $ref: "#/components/schemas/UsdcAmount" }
+        max_total:       { $ref: "#/components/schemas/UsdcAmount" }
+        withdrawn:       { $ref: "#/components/schemas/UsdcAmount" }
+        status:          { type: string, enum: [active, paused, closed] }
+        started_at:      { type: string, format: date-time }
+
+    Bounty:
+      type: object
+      properties:
+        id:              { type: string }
+        poster:          { $ref: "#/components/schemas/Address" }
+        amount:          { $ref: "#/components/schemas/UsdcAmount" }
+        task:            { type: string }
+        deadline:        { type: string, format: date-time }
+        submission_bond: { $ref: "#/components/schemas/UsdcAmount" }
+        max_attempts:    { type: integer }
+        attempt_count:   { type: integer }
+        status:          { type: string, enum: [open, claimed, awarded, expired] }
+
+    Deposit:
+      type: object
+      properties:
+        id:         { type: string }
+        depositor:  { $ref: "#/components/schemas/Address" }
+        provider:   { $ref: "#/components/schemas/Address" }
+        amount:     { $ref: "#/components/schemas/UsdcAmount" }
+        expiry:     { type: string, format: date-time }
+        status:     { type: string, enum: [locked, returned, forfeited, expired] }
+
+    WalletStatus:
+      type: object
+      properties:
+        wallet:         { $ref: "#/components/schemas/Address" }
+        monthly_volume: { $ref: "#/components/schemas/UsdcAmount" }
+        tier:           { type: string, enum: [standard, preferred] }
+        fee_rate_bps:   { type: integer }
+
+    Reputation:
+      type: object
+      properties:
+        wallet:                 { $ref: "#/components/schemas/Address" }
+        transactions_completed: { type: integer }
+        total_volume:           { $ref: "#/components/schemas/UsdcAmount" }
+        dispute_rate:           { type: number }
+        avg_completion_time:    { type: number, description: seconds }
+        avg_rating:             { type: number }
+        tier:                   { type: string }
+
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:   { type: string }
+        message: { type: string }
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Server healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+
+  /invoices:
+    post:
+      summary: Create invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Invoice" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Invoice" } } } }
+        "400": { description: Invalid, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    get:
+      summary: List invoices
+      parameters:
+        - in: query
+          name: wallet
+          schema: { type: string }
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Offset" }
+      responses:
+        "200": { description: Invoice list }
+
+  /invoices/{id}:
+    get:
+      summary: Get invoice
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Invoice, content: { application/json: { schema: { $ref: "#/components/schemas/Invoice" } } } }
+        "404": { description: Not found }
+
+  /escrows:
+    post:
+      summary: Fund escrow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoice_id]
+              properties:
+                invoice_id: { type: string }
+      responses:
+        "201": { description: Funded, content: { application/json: { schema: { $ref: "#/components/schemas/Escrow" } } } }
+        "402": { description: Insufficient balance }
+        "409": { description: Already funded }
+
+  /escrows/{id}:
+    get:
+      summary: Get escrow
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Escrow, content: { application/json: { schema: { $ref: "#/components/schemas/Escrow" } } } }
+
+  /escrows/{id}/claim-start:
+    post:
+      summary: Payee signals work begun
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Confirmed }
+
+  /escrows/{id}/evidence:
+    post:
+      summary: Submit work evidence
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [evidence_uri]
+              properties:
+                evidence_uri:    { type: string }
+                milestone_index: { type: integer }
+      responses:
+        "200": { description: Recorded }
+
+  /escrows/{id}/release:
+    post:
+      summary: Payer releases full escrow
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Released }
+
+  /escrows/{id}/release-milestone:
+    post:
+      summary: Release a milestone
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [milestone_index]
+              properties:
+                milestone_index: { type: integer }
+      responses:
+        "200": { description: Released }
+
+  /escrows/{id}/cancel:
+    post:
+      summary: Payer cancels escrow
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Cancelled }
+        "409": { description: Cannot cancel }
+
+  /escrows/{id}/mutual-cancel:
+    post:
+      summary: Mutual cancellation
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payer_sig, payee_sig]
+              properties:
+                payer_sig: { type: string }
+                payee_sig: { type: string }
+      responses:
+        "200": { description: Cancelled }
+
+  /tabs:
+    post:
+      summary: Open metered tab
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, limit, per_unit, expires_in]
+              properties:
+                provider:   { $ref: "#/components/schemas/Address" }
+                limit:      { type: number }
+                per_unit:   { type: number }
+                expires_in: { type: integer }
+      responses:
+        "201": { description: Tab opened, content: { application/json: { schema: { $ref: "#/components/schemas/Tab" } } } }
+
+  /tabs/{id}:
+    get:
+      summary: Get tab
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Tab, content: { application/json: { schema: { $ref: "#/components/schemas/Tab" } } } }
+
+  /tabs/{id}/charge:
+    post:
+      summary: Record charge
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, call_count, provider_sig]
+              properties:
+                amount:       { type: number }
+                call_count:   { type: integer }
+                provider_sig: { type: string }
+      responses:
+        "200": { description: Charged }
+        "402": { description: Tab depleted }
+
+  /tabs/{id}/close:
+    post:
+      summary: Close tab
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [total_charged, call_count, provider_sig]
+              properties:
+                total_charged: { type: number }
+                call_count:    { type: integer }
+                provider_sig:  { type: string }
+      responses:
+        "200": { description: Closed }
+
+  /streams:
+    post:
+      summary: Open stream
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payee, rate_per_second, max_total]
+              properties:
+                payee:           { $ref: "#/components/schemas/Address" }
+                rate_per_second: { type: number }
+                max_total:       { type: number }
+      responses:
+        "201": { description: Stream opened, content: { application/json: { schema: { $ref: "#/components/schemas/Stream" } } } }
+
+  /streams/{id}:
+    get:
+      summary: Get stream
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Stream, content: { application/json: { schema: { $ref: "#/components/schemas/Stream" } } } }
+
+  /streams/{id}/withdraw:
+    post:
+      summary: Withdraw accrued funds
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Withdrawn }
+
+  /streams/{id}/close:
+    post:
+      summary: Close stream
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Closed }
+
+  /subscriptions:
+    post:
+      summary: Create subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, amount, interval_seconds]
+              properties:
+                provider:         { $ref: "#/components/schemas/Address" }
+                amount:           { type: number }
+                interval_seconds: { type: integer }
+      responses:
+        "201": { description: Created }
+
+  /subscriptions/{id}:
+    get:
+      summary: Get subscription
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Subscription }
+    delete:
+      summary: Cancel subscription
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Cancelled }
+
+  /bounties:
+    post:
+      summary: Post bounty
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, task, deadline]
+              properties:
+                amount:          { type: number }
+                task:            { type: string }
+                deadline:        { type: string, format: date-time }
+                submission_bond: { type: number, default: 0 }
+                max_attempts:    { type: integer, default: 0 }
+      responses:
+        "201": { description: Posted, content: { application/json: { schema: { $ref: "#/components/schemas/Bounty" } } } }
+    get:
+      summary: List open bounties
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Offset" }
+      responses:
+        "200": { description: Bounties }
+
+  /bounties/{id}:
+    get:
+      summary: Get bounty
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Bounty, content: { application/json: { schema: { $ref: "#/components/schemas/Bounty" } } } }
+
+  /bounties/{id}/submit:
+    post:
+      summary: Submit solution
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [evidence_uri]
+              properties:
+                evidence_uri: { type: string }
+      responses:
+        "200": { description: Submitted }
+
+  /bounties/{id}/award:
+    post:
+      summary: Award bounty
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [winner]
+              properties:
+                winner: { $ref: "#/components/schemas/Address" }
+      responses:
+        "200": { description: Awarded }
+
+  /bounties/{id}/reject:
+    post:
+      summary: Reject submission
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [submitter]
+              properties:
+                submitter: { $ref: "#/components/schemas/Address" }
+      responses:
+        "200": { description: Rejected }
+
+  /deposits:
+    post:
+      summary: Lock deposit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, amount, expires_in]
+              properties:
+                provider:   { $ref: "#/components/schemas/Address" }
+                amount:     { type: number }
+                expires_in: { type: integer }
+      responses:
+        "201": { description: Locked, content: { application/json: { schema: { $ref: "#/components/schemas/Deposit" } } } }
+
+  /deposits/{id}:
+    get:
+      summary: Get deposit
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Deposit, content: { application/json: { schema: { $ref: "#/components/schemas/Deposit" } } } }
+
+  /deposits/{id}/return:
+    post:
+      summary: Return deposit
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Returned }
+
+  /deposits/{id}/forfeit:
+    post:
+      summary: Forfeit deposit
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Forfeited }
+
+  /payments/direct:
+    post:
+      summary: Direct USDC payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, amount]
+              properties:
+                to:     { $ref: "#/components/schemas/Address" }
+                amount: { type: number }
+                memo:   { type: string }
+      responses:
+        "200": { description: Sent }
+        "402": { description: Insufficient balance }
+
+  /disputes:
+    post:
+      summary: File dispute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoice_id, reason, details]
+              properties:
+                invoice_id:   { type: string }
+                reason:       { type: string, enum: [INCOMPLETE_DELIVERY, WRONG_DELIVERABLE, QUALITY_BELOW_SPEC, NO_DELIVERY, PAYMENT_NOT_RELEASED, TIMEOUT_UNFAIR, OVERCHARGE] }
+                details:      { type: string }
+                evidence_uri: { type: string }
+      responses:
+        "201": { description: Filed }
+        "409": { description: Already filed }
+        "410": { description: Window closed }
+
+  /disputes/{id}:
+    get:
+      summary: Get dispute
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Dispute }
+
+  /webhooks:
+    post:
+      summary: Register webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, events]
+              properties:
+                url:    { type: string, format: uri }
+                events: { type: array, items: { type: string } }
+                chains: { type: array, items: { type: string } }
+      responses:
+        "201": { description: Registered }
+    get:
+      summary: List webhooks
+      responses:
+        "200": { description: Webhooks }
+
+  /webhooks/{id}:
+    delete:
+      summary: Delete webhook
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "204": { description: Deleted }
+
+  /events/{wallet}:
+    get:
+      summary: Poll events for wallet
+      parameters:
+        - { $ref: "#/components/parameters/WalletParam" }
+        - in: query
+          name: since
+          schema: { type: integer }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: Events }
+
+  /status/{wallet}:
+    get:
+      summary: Wallet status and tier
+      parameters: [{ $ref: "#/components/parameters/WalletParam" }]
+      responses:
+        "200": { description: Status, content: { application/json: { schema: { $ref: "#/components/schemas/WalletStatus" } } } }
+
+  /reputation/{wallet}:
+    get:
+      summary: Wallet reputation
+      parameters: [{ $ref: "#/components/parameters/WalletParam" }]
+      responses:
+        "200": { description: Reputation, content: { application/json: { schema: { $ref: "#/components/schemas/Reputation" } } } }
+
+  /protocol/versions:
+    get:
+      summary: Supported protocol versions and chains
+      security: []
+      responses:
+        "200": { description: Protocol info }
+
+  /faucet:
+    post:
+      summary: Request test USDC (testnet only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [wallet]
+              properties:
+                wallet: { $ref: "#/components/schemas/Address" }
+      responses:
+        "200": { description: USDC sent }
+        "429": { description: Rate limited }

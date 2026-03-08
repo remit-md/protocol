@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {RemitTypes} from "../libraries/RemitTypes.sol";
+
+/// @title IRemitStream
+/// @notice Continuous streaming payments (lockup-linear model)
+/// @dev Fund-holding. IMMUTABLE.
+interface IRemitStream {
+    /// @notice Open a payment stream
+    /// @param streamId Unique stream identifier
+    /// @param payee Address receiving the stream
+    /// @param ratePerSecond USDC per second (6 decimals)
+    /// @param maxTotal Maximum total USDC to lock (safety cap)
+    /// @dev Caller must have approved maxTotal USDC. Emits StreamOpened.
+    function openStream(bytes32 streamId, address payee, uint64 ratePerSecond, uint96 maxTotal) external;
+
+    /// @notice Payee withdraws accrued funds
+    /// @param streamId The stream ID
+    /// @dev Withdrawable = ratePerSecond * elapsed - alreadyWithdrawn. Emits StreamWithdrawal.
+    function withdraw(bytes32 streamId) external;
+
+    /// @notice Close the stream. Settle remaining.
+    /// @param streamId The stream ID
+    /// @dev Either party. Payee gets accrued, payer gets remainder. Emits StreamClosed.
+    function closeStream(bytes32 streamId) external;
+
+    // === View Functions ===
+
+    function getStream(bytes32 streamId) external view returns (RemitTypes.Stream memory);
+
+    /// @notice Calculate currently withdrawable amount
+    function withdrawable(bytes32 streamId) external view returns (uint96);
+}
