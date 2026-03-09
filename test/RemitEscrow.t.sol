@@ -305,6 +305,68 @@ contract RemitEscrowTest is TestBase {
         assertApproxEqAbs(split2Balance, 39.6e6, 1e4);
     }
 
+    function test_releaseEscrow_splitFeeRounding_noOverflow() public {
+        // Use 3 splits with amounts that cause rounding dust in fee calculation.
+        // Fee = 1% of 100e6 = 1e6. Split amounts: 33e6, 33e6, 34e6.
+        // Without fix: splitFee(33e6) = 1e6*33e6/100e6 = 330000 (x2) = 660000
+        //              splitFee(34e6) = 1e6*34e6/100e6 = 340000
+        //              sum(splitFees) = 660000 + 340000 = 1000000 = fee (no dust here)
+        // Try harder: 33333333, 33333333, 33333334 (sums to 100e6)
+        // splitFee(33333333) = 1e6*33333333/100e6 = 333333 (truncated from 333333.33)
+        // sum(first two) = 666666, but fee = 1000000 → last splitFee = 333334
+        // Without fix: last splitFee = 1e6*33333334/100e6 = 333333 (truncated)
+        // sum = 999999 < 1000000 → feeRecipient gets 1000000, total outflow = 100000001 > 100e6
+        address split1 = makeAddr("rsplit1");
+        address split2 = makeAddr("rsplit2");
+        address split3 = makeAddr("rsplit3");
+
+        uint96 s1 = 33_333_333; // 33.333333 USDC
+        uint96 s2 = 33_333_333;
+        uint96 s3 = 33_333_334;
+        uint96 total = s1 + s2 + s3; // exactly 100e6
+
+        RemitTypes.Split[] memory splits = new RemitTypes.Split[](3);
+        splits[0] = RemitTypes.Split({payee: split1, amount: s1});
+        splits[1] = RemitTypes.Split({payee: split2, amount: s2});
+        splits[2] = RemitTypes.Split({payee: split3, amount: s3});
+
+        vm.prank(payer);
+        escrow.createEscrow(
+            INV, payee, total, uint64(block.timestamp + TIMEOUT_DELTA), new RemitTypes.Milestone[](0), splits
+        );
+
+        vm.prank(payee);
+        escrow.claimStart(INV);
+
+        uint256 escrowBalBefore = usdc.balanceOf(address(escrow));
+
+        vm.prank(payer);
+        escrow.releaseEscrow(INV);
+
+        // Total outflow must exactly equal escrowed amount — no wei stolen from other escrows
+        uint256 totalOut =
+            usdc.balanceOf(split1) + usdc.balanceOf(split2) + usdc.balanceOf(split3) + usdc.balanceOf(feeRecipient);
+        assertEq(totalOut, escrowBalBefore, "total outflow must equal escrowed amount");
+        assertEq(usdc.balanceOf(address(escrow)), 0, "escrow must be drained to zero");
+    }
+
+    function test_releaseEscrow_revertsOnMilestoneEscrow() public {
+        // A milestone-based escrow should NOT be releasable via releaseEscrow().
+        // After partial milestone releases, calling releaseEscrow() would double-pay.
+        uint96[] memory amounts = new uint96[](2);
+        amounts[0] = 50e6;
+        amounts[1] = 50e6;
+
+        _createEscrowWithMilestones(INV, amounts);
+
+        vm.prank(payee);
+        escrow.claimStart(INV);
+
+        vm.prank(payer);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.MilestoneEscrowBlocked.selector, INV));
+        escrow.releaseEscrow(INV);
+    }
+
     // =========================================================================
     // releaseMilestone
     // =========================================================================

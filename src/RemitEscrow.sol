@@ -185,6 +185,7 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
 
         if (escrow.payer != msg.sender) revert RemitErrors.Unauthorized(msg.sender);
         if (escrow.status != RemitTypes.EscrowStatus.Active) revert RemitErrors.EscrowFrozen(invoiceId);
+        if (escrow.milestoneCount > 0) revert RemitErrors.MilestoneEscrowBlocked(invoiceId);
 
         uint96 amount = escrow.amount;
         uint96 fee = escrow.feeAmount;
@@ -200,14 +201,21 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
 
         // --- Interactions ---
         if (splitCount > 0) {
-            // Distribute to splits proportionally minus fee
+            // Distribute to splits proportionally minus fee.
+            // Last split's fee is computed as remainder to prevent rounding dust
+            // from causing total outflow > escrowed amount.
             RemitTypes.Split[] storage splits = _splits[invoiceId];
-            uint96 totalPaid;
+            uint96 feeAccumulated;
             for (uint256 i; i < splitCount; ++i) {
-                // Proportional fee: fee * split.amount / amount
-                uint96 splitFee = uint96((uint256(fee) * splits[i].amount) / amount);
+                uint96 splitFee;
+                if (i < splitCount - 1) {
+                    splitFee = uint96((uint256(fee) * splits[i].amount) / amount);
+                    feeAccumulated += splitFee;
+                } else {
+                    // Last split gets the remainder to guarantee sum(splitFees) == fee
+                    splitFee = fee - feeAccumulated;
+                }
                 uint96 splitNet = splits[i].amount - splitFee;
-                totalPaid += splitNet;
                 usdc.safeTransfer(splits[i].payee, splitNet);
             }
             usdc.safeTransfer(feeRecipient, fee);

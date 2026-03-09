@@ -40,6 +40,9 @@ library RemitErrors {
     error DisputeWindowClosed(bytes32 invoiceId);
     error DisputeAlreadyFiled(bytes32 invoiceId);
 
+    // Milestone
+    error MilestoneEscrowBlocked(bytes32 invoiceId);
+
     // Cancellation
     error CancelBlockedClaimStart(bytes32 invoiceId);
     error CancelBlockedEvidence(bytes32 invoiceId);
