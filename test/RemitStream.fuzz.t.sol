@@ -24,7 +24,7 @@ contract RemitStreamFuzzTest is Test {
     function setUp() public {
         usdc = new MockUSDC();
         feeCalc = new MockFeeCalculator();
-        streamContract = new RemitStream(address(usdc), address(feeCalc), feeRecipient);
+        streamContract = new RemitStream(address(usdc), address(feeCalc), feeRecipient, address(0));
 
         // Give payer a large allowance
         usdc.mint(payer, type(uint96).max);

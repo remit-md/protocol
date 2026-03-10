@@ -8,9 +8,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IRemitRouter} from "./interfaces/IRemitRouter.sol";
 import {IRemitFeeCalculator} from "./interfaces/IRemitFeeCalculator.sol";
+import {IRemitKeyRegistry} from "./interfaces/IRemitKeyRegistry.sol";
 import {RemitTypes} from "./libraries/RemitTypes.sol";
 import {RemitErrors} from "./libraries/RemitErrors.sol";
 import {RemitEvents} from "./libraries/RemitEvents.sol";
+import {RemitKeyValidator} from "./libraries/RemitKeyValidator.sol";
 
 /// @title RemitRouter
 /// @notice Entry point for AI agents. Stores current contract addresses and provides
@@ -24,6 +26,7 @@ import {RemitEvents} from "./libraries/RemitEvents.sol";
 ///      holds no funds.
 contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     using SafeERC20 for IERC20;
+    using RemitKeyValidator for IRemitKeyRegistry;
 
     // =========================================================================
     // Storage (proxy-safe layout)
@@ -45,6 +48,9 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     address public override usdc;
     address public override protocolAdmin;
     address public override feeRecipient;
+
+    /// @dev V2: Session key registry. address(0) = key management not enabled.
+    IRemitKeyRegistry public keyRegistry;
 
     // =========================================================================
     // Constructor — disables direct initialization of implementation contract
@@ -106,6 +112,9 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
         if (to == msg.sender) revert RemitErrors.SelfPayment(msg.sender);
         if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
 
+        // V2: Validate session key delegation and record spend
+        RemitKeyValidator._validateAndRecord(keyRegistry, msg.sender, amount, RemitTypes.PaymentType.DIRECT);
+
         uint96 fee = IRemitFeeCalculator(feeCalculator).calculateFee(msg.sender, amount);
         uint96 netAmount = amount - fee;
 
@@ -121,6 +130,32 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
         IRemitFeeCalculator(feeCalculator).recordTransaction(msg.sender, amount);
 
         emit RemitEvents.DirectPayment(msg.sender, to, amount, fee, memo);
+    }
+
+    /// @inheritdoc IRemitRouter
+    /// @dev Same payment logic as payDirect but emits PayPerRequest for Ponder indexing of endpoint calls.
+    ///      Caller must approve this contract to spend `amount` USDC beforehand.
+    function payPerRequest(address to, uint96 amount, string calldata endpoint) external override nonReentrant {
+        if (to == address(0)) revert RemitErrors.ZeroAddress();
+        if (amount == 0) revert RemitErrors.ZeroAmount();
+        if (to == msg.sender) revert RemitErrors.SelfPayment(msg.sender);
+        if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
+
+        // V2: Validate session key delegation and record spend
+        RemitKeyValidator._validateAndRecord(keyRegistry, msg.sender, amount, RemitTypes.PaymentType.PAY_PER_REQUEST);
+
+        uint96 fee = IRemitFeeCalculator(feeCalculator).calculateFee(msg.sender, amount);
+        uint96 netAmount = amount - fee;
+
+        IERC20(usdc).safeTransferFrom(msg.sender, to, netAmount);
+
+        if (fee > 0) {
+            IERC20(usdc).safeTransferFrom(msg.sender, feeRecipient, fee);
+        }
+
+        IRemitFeeCalculator(feeCalculator).recordTransaction(msg.sender, amount);
+
+        emit RemitEvents.PayPerRequest(msg.sender, to, amount, fee, endpoint);
     }
 
     // =========================================================================
@@ -161,6 +196,12 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     function setFeeCalculator(address newFeeCalculator) external override onlyOwner {
         if (newFeeCalculator == address(0)) revert RemitErrors.ZeroAddress();
         feeCalculator = newFeeCalculator;
+    }
+
+    /// @notice Set the KeyRegistry contract (V2: session key delegation). address(0) disables key management.
+    /// @param newKeyRegistry The RemitKeyRegistry contract address
+    function setKeyRegistry(address newKeyRegistry) external onlyOwner {
+        keyRegistry = IRemitKeyRegistry(newKeyRegistry);
     }
 
     // =========================================================================

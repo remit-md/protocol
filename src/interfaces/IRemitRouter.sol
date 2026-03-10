@@ -38,6 +38,12 @@ interface IRemitRouter {
     /// @param memo Optional memo hash
     function payDirect(address to, uint96 amount, bytes32 memo) external;
 
+    /// @notice Make a pay-per-request payment (direct payment with service endpoint metadata)
+    /// @param to Recipient address (service provider)
+    /// @param amount USDC amount (6 decimals)
+    /// @param endpoint Service endpoint URI being called (e.g. "https://api.example.com/v1/inference")
+    function payPerRequest(address to, uint96 amount, string calldata endpoint) external;
+
     /// @notice Update contract addresses (admin only, timelocked)
     function setEscrow(address newEscrow) external;
     function setTab(address newTab) external;

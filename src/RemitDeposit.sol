@@ -6,9 +6,11 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IRemitDeposit} from "./interfaces/IRemitDeposit.sol";
+import {IRemitKeyRegistry} from "./interfaces/IRemitKeyRegistry.sol";
 import {RemitTypes} from "./libraries/RemitTypes.sol";
 import {RemitErrors} from "./libraries/RemitErrors.sol";
 import {RemitEvents} from "./libraries/RemitEvents.sol";
+import {RemitKeyValidator} from "./libraries/RemitKeyValidator.sol";
 
 /// @title RemitDeposit
 /// @notice Refundable USDC deposits / collateral for AI agent service agreements
@@ -26,6 +28,8 @@ contract RemitDeposit is IRemitDeposit, ReentrancyGuard {
     // =========================================================================
 
     IERC20 public immutable usdc;
+    /// @dev V2: Session key registry. address(0) = key management not enabled.
+    IRemitKeyRegistry public immutable keyRegistry;
 
     // =========================================================================
     // Storage
@@ -38,9 +42,11 @@ contract RemitDeposit is IRemitDeposit, ReentrancyGuard {
     // =========================================================================
 
     /// @param _usdc USDC token address
-    constructor(address _usdc) {
+    /// @param _keyRegistry V2: Session key registry (address(0) to disable)
+    constructor(address _usdc, address _keyRegistry) {
         if (_usdc == address(0)) revert RemitErrors.ZeroAddress();
         usdc = IERC20(_usdc);
+        keyRegistry = IRemitKeyRegistry(_keyRegistry);
     }
 
     // =========================================================================
@@ -56,6 +62,8 @@ contract RemitDeposit is IRemitDeposit, ReentrancyGuard {
         if (provider == msg.sender) revert RemitErrors.SelfPayment(msg.sender);
         if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
         if (expiry <= block.timestamp) revert RemitErrors.InvalidTimeout(expiry);
+        // V2: Validate session key delegation
+        RemitKeyValidator._validateAndRecord(keyRegistry, msg.sender, amount, RemitTypes.PaymentType.DEPOSIT);
 
         // --- Effects ---
         _deposits[depositId] = RemitTypes.Deposit({

@@ -27,13 +27,15 @@ library RemitTypes {
         Open, // 0: active, charges allowed
         Depleted, // 1: funds exhausted
         Closed, // 2: closed by either party
-        Expired // 3: past expiry time
+        Expired, // 3: past expiry time
+        PartiallyDisputed // 4: V2 — partial dispute filed; undisputed settled, disputed frozen
     }
 
     /// @notice Stream status
     enum StreamStatus {
         Active, // 0: streaming
-        Closed // 1: stopped
+        Closed, // 1: stopped voluntarily
+        Terminated // 2: auto-terminated due to balance depletion
     }
 
     /// @notice Bounty status
@@ -41,7 +43,8 @@ library RemitTypes {
         Open, // 0: accepting submissions
         Claimed, // 1: submission received, under review
         Awarded, // 2: winner paid
-        Expired // 3: deadline passed
+        Expired, // 3: deadline passed
+        Disputed // 4: V2 — rejection disputed by submitter; funds frozen
     }
 
     /// @notice Deposit status
@@ -49,6 +52,18 @@ library RemitTypes {
         Locked, // 0: funds locked
         Returned, // 1: returned to depositor
         Forfeited // 2: forfeited to provider
+    }
+
+    /// @notice V2: Payment type classification for routing, indexing, and session key restrictions
+    /// @dev Used as bitmask positions in allowedModelsBitmap: 0xFF = all models, 0x01 = DIRECT only
+    enum PaymentType {
+        DIRECT, // 0: simple direct transfer (bit 0)
+        PAY_PER_REQUEST, // 1: direct payment tied to a specific API/service endpoint (bit 1)
+        ESCROW, // 2: task-based escrow (bit 2)
+        TAB, // 3: metered tab / prepaid credit (bit 3)
+        STREAM, // 4: per-second streaming payment (bit 4)
+        BOUNTY, // 5: bounty posting / submission (bit 5)
+        DEPOSIT // 6: security deposit (bit 6)
     }
 
     /// @notice Core escrow struct (packed for gas efficiency)
@@ -91,6 +106,8 @@ library RemitTypes {
         uint64 perUnit; // cost per unit (USDC, 6 decimals)
         uint64 expiry;
         TabStatus status;
+        uint64 degradationTimestamp; // V2: timestamp when service degraded (0 if no partial dispute)
+        uint96 disputedAmount; // V2: amount frozen under partial dispute (0 if no partial dispute)
     }
 
     /// @notice Payment stream
@@ -117,7 +134,25 @@ library RemitTypes {
         BountyStatus status;
         bytes32 taskHash;
         uint96 submissionBond;
+        uint64 rejectedAt; // V2: timestamp of rejection (0 = not rejected); enables 24h dispute window
     }
+
+    /// @notice V2: 24-hour dispute window for rejected bounty submissions
+    uint64 constant BOUNTY_DISPUTE_WINDOW = 86400; // 24 hours
+
+    /// @notice V2: Dispute bond for escrow disputes (permissionless dispute filing)
+    struct DisputeBond {
+        address filer; // who filed the dispute (payer or payee)
+        uint96 filerBond; // bond amount posted by filer
+        uint96 respondentBond; // bond amount posted by respondent (0 if not yet posted)
+        uint64 counterBondDeadline; // timestamp after which filer can claim default win
+        bool respondentPosted; // true when respondent has posted their counter-bond
+    }
+
+    /// @notice V2: Dispute bond constants
+    uint96 constant DISPUTE_BOND_MIN = 500_000; // $0.50 minimum bond (USDC, 6 decimals)
+    uint96 constant DISPUTE_BOND_BPS = 500; // 5% base bond rate (in basis points)
+    uint64 constant COUNTER_BOND_WINDOW = 259_200; // 72 hours for respondent to post counter-bond
 
     /// @notice Deposit
     struct Deposit {
@@ -134,4 +169,15 @@ library RemitTypes {
     uint96 constant FEE_THRESHOLD = 10_000e6; // $10,000 in USDC (6 decimals)
     uint96 constant MIN_AMOUNT = 10_000; // $0.01 in USDC (6 decimals)
     uint96 constant CANCEL_FEE_BPS = 10; // 0.1% = 10 basis points
+
+    /// @notice V2: Escrow timeout floor durations (in seconds) per amount tier
+    uint64 constant TIMEOUT_FLOOR_UNDER_10 = 1_800; // <$10: 30 minutes
+    uint64 constant TIMEOUT_FLOOR_10_TO_100 = 7_200; // $10-$100: 2 hours
+    uint64 constant TIMEOUT_FLOOR_100_TO_1K = 86_400; // $100-$1K: 24 hours
+    uint64 constant TIMEOUT_FLOOR_OVER_1K = 259_200; // >$1K: 72 hours
+
+    /// @notice V2: Tier threshold amounts (USDC, 6 decimals)
+    uint96 constant TIMEOUT_TIER_10 = 10_000_000; // $10.00
+    uint96 constant TIMEOUT_TIER_100 = 100_000_000; // $100.00
+    uint96 constant TIMEOUT_TIER_1K = 1_000_000_000; // $1,000.00
 }

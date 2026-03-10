@@ -85,4 +85,100 @@ library RemitEvents {
     event DisputeResolved(bytes32 indexed invoiceId, uint96 payerAmount, uint96 payeeAmount);
 
     event FeeCollected(bytes32 indexed invoiceId, uint96 amount, address indexed feeRecipient);
+
+    // === V2 Events ===
+
+    /// @notice Emitted when a metered tab partial dispute is filed (charges after degradation_timestamp are disputed)
+    event TabPartialDispute(
+        bytes32 indexed tabId,
+        address indexed payer,
+        uint64 degradationTimestamp,
+        uint96 disputedAmount,
+        uint96 undisputedAmount
+    );
+
+    /// @notice Emitted when a streaming payer's balance falls below 5x the rate
+    event StreamBalanceWarning(
+        bytes32 indexed streamId,
+        address indexed payer,
+        uint96 currentBalance,
+        uint64 ratePerSecond,
+        uint64 secondsRemaining
+    );
+
+    /// @notice Emitted when a stream is auto-terminated due to zero payer balance
+    event StreamTerminatedInsufficientBalance(
+        bytes32 indexed streamId, address indexed payer, address indexed payee, uint96 totalStreamed, uint96 fee
+    );
+
+    /// @notice Emitted when a bounty submission is rejected (reason required)
+    event BountyRejected(
+        bytes32 indexed bountyId,
+        address indexed submitter,
+        address indexed poster,
+        string reason,
+        uint64 disputeWindowEnds
+    );
+
+    /// @notice Emitted when a master key delegates a session key
+    event KeyDelegated(
+        address indexed masterKey, address indexed sessionKey, uint96 spendingLimit, uint96 dailyLimit, uint64 expires
+    );
+
+    /// @notice Emitted when a session key is revoked
+    event KeyRevoked(address indexed masterKey, address indexed sessionKey);
+
+    /// @notice Emitted when a session key is nearing expiry (off-chain indexer should warn operator)
+    /// @param masterKey The operator wallet that owns the delegation
+    /// @param sessionKey The session key about to expire
+    /// @param expiresAt Unix timestamp when the delegation expires
+    event KeyExpiring(address indexed masterKey, address indexed sessionKey, uint64 expiresAt);
+
+    /// @notice V2: Emitted when a pay-per-request payment is made (endpoint metadata attached)
+    event PayPerRequest(address indexed payer, address indexed payee, uint96 amount, uint96 fee, string endpoint);
+
+    /// @notice V2: Emitted when a dispute bond is posted by the filing party (payer or payee)
+    event DisputeBondPosted(bytes32 indexed invoiceId, address indexed filer, uint96 bondAmount);
+
+    /// @notice V2: Emitted when the respondent posts their counter-bond
+    event CounterBondPosted(bytes32 indexed invoiceId, address indexed respondent, uint96 bondAmount);
+
+    /// @notice V2: Emitted when filer wins by default (respondent failed to post counter-bond in time)
+    event DisputeDefaultWin(
+        bytes32 indexed invoiceId, address indexed winner, uint96 bondReturned, uint96 escrowAmount
+    );
+
+    /// @notice V2: Emitted when a dispute bond is forfeited (loser's bond goes to protocol fee recipient)
+    event DisputeBondForfeited(bytes32 indexed invoiceId, address indexed loser, uint96 bondAmount);
+
+    /// @notice V2: Emitted when a dispute bond is returned to the winner
+    event DisputeBondReturned(bytes32 indexed invoiceId, address indexed winner, uint96 bondAmount);
+
+    /// @notice V2: Emitted when the filer increases their bond (signaling higher confidence)
+    event BondIncreased(bytes32 indexed invoiceId, address indexed filer, uint96 additionalAmount, uint96 totalBond);
+
+    // === V2 Arbitration Events ===
+
+    /// @notice Emitted when an arbitrator registers and stakes their bond
+    event ArbitratorRegistered(address indexed wallet, uint256 bondAmount, string metadataUri);
+
+    /// @notice Emitted when an arbitrator leaves the pool (bond locked in cooldown)
+    event ArbitratorRemoved(address indexed wallet, uint64 bondReleasedAt);
+
+    /// @notice Emitted when three arbitrators are proposed for a dispute
+    event ArbitratorsProposed(bytes32 indexed invoiceId, address arbitrator0, address arbitrator1, address arbitrator2);
+
+    /// @notice Emitted when a party strikes a proposed arbitrator
+    event ArbitratorStruck(bytes32 indexed invoiceId, address indexed striker, uint8 index);
+
+    /// @notice Emitted when a final arbitrator is assigned and the 48h decision window begins
+    event ArbitratorAssigned(bytes32 indexed invoiceId, address indexed arbitrator, uint64 deadline);
+
+    /// @notice Emitted when the assigned arbitrator renders a decision with partial award percentages
+    event ArbitrationDecisionRendered(
+        bytes32 indexed invoiceId, address indexed arbitrator, uint8 payerPercent, uint8 payeePercent
+    );
+
+    /// @notice Emitted when a disputed escrow is escalated to the arbitration contract
+    event DisputeEscalatedToArbitration(bytes32 indexed invoiceId, address indexed arbitrationContract, uint8 tier);
 }

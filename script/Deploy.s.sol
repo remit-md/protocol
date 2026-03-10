@@ -11,6 +11,8 @@ import {RemitTab} from "../src/RemitTab.sol";
 import {RemitStream} from "../src/RemitStream.sol";
 import {RemitBounty} from "../src/RemitBounty.sol";
 import {RemitDeposit} from "../src/RemitDeposit.sol";
+import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
+import {RemitArbitration} from "../src/RemitArbitration.sol";
 
 /// @title Deploy
 /// @notice Production deployment script for all Remit protocol contracts.
@@ -27,6 +29,8 @@ import {RemitDeposit} from "../src/RemitDeposit.sol";
 contract Deploy is Script {
     // Deployed addresses (set during run, logged in summary)
     address internal _feeCalcProxy;
+    address internal _keyRegistry;
+    address internal _arbitration;
     address internal _routerProxy;
     address internal _escrow;
     address internal _tab;
@@ -48,8 +52,12 @@ contract Deploy is Script {
 
         vm.startBroadcast();
         _deployFeeCalculator(deployer);
+        _deployKeyRegistry(deployer);
+        _deployArbitration(deployer, usdcAddr);
         _deployFundHolding(usdcAddr, protocolAdmin, feeRecipient);
         _authorizeFundHolding();
+        _authorizeKeyRegistry();
+        _authorizeArbitration();
         _deployRouter(deployer, usdcAddr, protocolAdmin, feeRecipient);
         _wireRouter();
         vm.stopBroadcast();
@@ -65,21 +73,46 @@ contract Deploy is Script {
         console2.log("FeeCalculator (proxy): ", _feeCalcProxy);
     }
 
+    function _deployKeyRegistry(address owner) internal {
+        _keyRegistry = address(new RemitKeyRegistry(owner));
+        console2.log("RemitKeyRegistry:", _keyRegistry);
+    }
+
+    function _deployArbitration(address owner, address usdcAddr) internal {
+        _arbitration = address(new RemitArbitration(usdcAddr, owner));
+        console2.log("RemitArbitration:", _arbitration);
+    }
+
     function _deployFundHolding(address usdcAddr, address protocolAdmin, address feeRecipient) internal {
-        _escrow = address(new RemitEscrow(usdcAddr, _feeCalcProxy, protocolAdmin, feeRecipient));
+        _escrow =
+            address(new RemitEscrow(usdcAddr, _feeCalcProxy, protocolAdmin, feeRecipient, _keyRegistry, _arbitration));
         console2.log("RemitEscrow:   ", _escrow);
 
-        _tab = address(new RemitTab(usdcAddr, _feeCalcProxy, feeRecipient));
+        _tab = address(new RemitTab(usdcAddr, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         console2.log("RemitTab:      ", _tab);
 
-        _stream = address(new RemitStream(usdcAddr, _feeCalcProxy, feeRecipient));
+        _stream = address(new RemitStream(usdcAddr, _feeCalcProxy, feeRecipient, _keyRegistry));
         console2.log("RemitStream:   ", _stream);
 
-        _bounty = address(new RemitBounty(usdcAddr, _feeCalcProxy, feeRecipient));
+        _bounty = address(new RemitBounty(usdcAddr, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         console2.log("RemitBounty:   ", _bounty);
 
-        _deposit = address(new RemitDeposit(usdcAddr));
+        _deposit = address(new RemitDeposit(usdcAddr, _keyRegistry));
         console2.log("RemitDeposit:  ", _deposit);
+    }
+
+    function _authorizeKeyRegistry() internal {
+        RemitKeyRegistry kr = RemitKeyRegistry(_keyRegistry);
+        kr.authorizeContract(_escrow);
+        kr.authorizeContract(_tab);
+        kr.authorizeContract(_stream);
+        kr.authorizeContract(_bounty);
+        kr.authorizeContract(_deposit);
+    }
+
+    function _authorizeArbitration() internal {
+        RemitArbitration arb = RemitArbitration(_arbitration);
+        arb.authorizeEscrow(_escrow);
     }
 
     function _authorizeFundHolding() internal {
@@ -122,6 +155,8 @@ contract Deploy is Script {
         console2.log("");
         console2.log("=== Deployment Complete ===");
         console2.log("FeeCalculator: ", _feeCalcProxy);
+        console2.log("KeyRegistry:   ", _keyRegistry);
+        console2.log("Arbitration:   ", _arbitration);
         console2.log("Router:        ", _routerProxy);
         console2.log("Escrow:        ", _escrow);
         console2.log("Tab:           ", _tab);

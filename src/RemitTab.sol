@@ -9,9 +9,11 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 import {IRemitTab} from "./interfaces/IRemitTab.sol";
 import {IRemitFeeCalculator} from "./interfaces/IRemitFeeCalculator.sol";
+import {IRemitKeyRegistry} from "./interfaces/IRemitKeyRegistry.sol";
 import {RemitTypes} from "./libraries/RemitTypes.sol";
 import {RemitErrors} from "./libraries/RemitErrors.sol";
 import {RemitEvents} from "./libraries/RemitEvents.sol";
+import {RemitKeyValidator} from "./libraries/RemitKeyValidator.sol";
 
 /// @title RemitTab
 /// @notice Metered payment tabs for AI agent services (off-chain payment channels)
@@ -38,6 +40,9 @@ contract RemitTab is IRemitTab, ReentrancyGuard, EIP712 {
     IERC20 public immutable usdc;
     IRemitFeeCalculator public immutable feeCalculator;
     address public immutable feeRecipient;
+    address public immutable protocolAdmin;
+    /// @dev V2: Session key registry. address(0) = key management not enabled.
+    IRemitKeyRegistry public immutable keyRegistry;
 
     // =========================================================================
     // Storage
@@ -52,14 +57,25 @@ contract RemitTab is IRemitTab, ReentrancyGuard, EIP712 {
     /// @param _usdc USDC token address
     /// @param _feeCalculator Fee calculator contract address
     /// @param _feeRecipient Address that receives protocol fees
-    constructor(address _usdc, address _feeCalculator, address _feeRecipient) EIP712("RemitTab", "1") {
+    /// @param _protocolAdmin Admin address for partial dispute resolution
+    /// @param _keyRegistry V2: Session key registry (address(0) to disable)
+    constructor(
+        address _usdc,
+        address _feeCalculator,
+        address _feeRecipient,
+        address _protocolAdmin,
+        address _keyRegistry
+    ) EIP712("RemitTab", "1") {
         if (_usdc == address(0)) revert RemitErrors.ZeroAddress();
         if (_feeCalculator == address(0)) revert RemitErrors.ZeroAddress();
         if (_feeRecipient == address(0)) revert RemitErrors.ZeroAddress();
+        if (_protocolAdmin == address(0)) revert RemitErrors.ZeroAddress();
 
         usdc = IERC20(_usdc);
         feeCalculator = IRemitFeeCalculator(_feeCalculator);
         feeRecipient = _feeRecipient;
+        protocolAdmin = _protocolAdmin;
+        keyRegistry = IRemitKeyRegistry(_keyRegistry);
     }
 
     // =========================================================================
@@ -78,6 +94,8 @@ contract RemitTab is IRemitTab, ReentrancyGuard, EIP712 {
         if (provider == msg.sender) revert RemitErrors.SelfPayment(msg.sender);
         if (limit < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(limit, RemitTypes.MIN_AMOUNT);
         if (expiry <= block.timestamp) revert RemitErrors.InvalidTimeout(expiry);
+        // V2: Validate session key delegation
+        RemitKeyValidator._validateAndRecord(keyRegistry, msg.sender, limit, RemitTypes.PaymentType.TAB);
 
         // --- Effects ---
         _tabs[tabId] = RemitTypes.Tab({
@@ -87,7 +105,9 @@ contract RemitTab is IRemitTab, ReentrancyGuard, EIP712 {
             totalCharged: 0,
             perUnit: perUnit,
             expiry: expiry,
-            status: RemitTypes.TabStatus.Open
+            status: RemitTypes.TabStatus.Open,
+            degradationTimestamp: 0,
+            disputedAmount: 0
         });
 
         // --- Interactions ---
@@ -139,6 +159,69 @@ contract RemitTab is IRemitTab, ReentrancyGuard, EIP712 {
         _settleTab(tabId, tab, totalCharged);
     }
 
+    /// @inheritdoc IRemitTab
+    /// @dev Charges before degradationTimestamp settle to provider immediately; charges after are frozen.
+    ///      Requires two provider-signed states: the undisputed cumulative state and the full state.
+    ///      CEI: validate + verify sigs → effects (status, storage) → interactions (transfers)
+    function filePartialDispute(
+        bytes32 tabId,
+        uint64 degradationTimestamp,
+        uint96 undisputedAmount,
+        uint32 undisputedCallCount,
+        bytes calldata undisputedSig,
+        uint96 totalCharged,
+        uint32 totalCallCount,
+        bytes calldata totalSig
+    ) external nonReentrant {
+        RemitTypes.Tab storage tab = _getTab(tabId);
+
+        // --- Checks ---
+        if (msg.sender != tab.payer) revert RemitErrors.Unauthorized(msg.sender);
+        if (tab.status != RemitTypes.TabStatus.Open) revert RemitErrors.TabDepleted(tabId);
+        if (degradationTimestamp == 0 || degradationTimestamp > block.timestamp) {
+            revert RemitErrors.InvalidTimeout(degradationTimestamp);
+        }
+        if (undisputedAmount > totalCharged) revert RemitErrors.InsufficientBalance(totalCharged, undisputedAmount);
+        if (totalCharged > tab.limit) revert RemitErrors.InsufficientBalance(tab.limit, totalCharged);
+        if (totalCharged == undisputedAmount) revert RemitErrors.ZeroAmount();
+
+        // Verify both signed states from provider
+        _verifyProviderSig(tabId, undisputedAmount, undisputedCallCount, tab.provider, undisputedSig);
+        _verifyProviderSig(tabId, totalCharged, totalCallCount, tab.provider, totalSig);
+
+        // Delegate effects + interactions to helper to stay under stack limit
+        _applyPartialDispute(tabId, tab, degradationTimestamp, undisputedAmount, totalCharged);
+    }
+
+    /// @inheritdoc IRemitTab
+    /// @dev Admin-only. Splits the frozen disputed amount between payer and provider.
+    ///      CEI: validate → update state → transfer funds
+    function resolvePartialDispute(bytes32 tabId, uint96 providerAmount, uint96 payerAmount) external nonReentrant {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+
+        RemitTypes.Tab storage tab = _getTab(tabId);
+
+        if (tab.status != RemitTypes.TabStatus.PartiallyDisputed) revert RemitErrors.TabDepleted(tabId);
+
+        uint96 disputed = tab.disputedAmount;
+        if (providerAmount + payerAmount != disputed) {
+            revert RemitErrors.InsufficientBalance(disputed, providerAmount + payerAmount);
+        }
+
+        address payer = tab.payer;
+        address provider = tab.provider;
+
+        // --- Effects ---
+        tab.status = RemitTypes.TabStatus.Closed;
+        tab.disputedAmount = 0;
+
+        // --- Interactions ---
+        if (providerAmount > 0) usdc.safeTransfer(provider, providerAmount);
+        if (payerAmount > 0) usdc.safeTransfer(payer, payerAmount);
+
+        emit RemitEvents.DisputeResolved(tabId, payerAmount, providerAmount);
+    }
+
     // =========================================================================
     // View Functions
     // =========================================================================
@@ -177,6 +260,43 @@ contract RemitTab is IRemitTab, ReentrancyGuard, EIP712 {
         bytes32 digest = _hashTypedDataV4(structHash);
         address signer = ECDSA.recover(digest, sig);
         if (signer != provider) revert RemitErrors.InvalidSignature();
+    }
+
+    /// @dev V2: Apply partial dispute: settle undisputed portion, freeze disputed amount.
+    ///      Split from filePartialDispute to stay under stack-depth limit.
+    function _applyPartialDispute(
+        bytes32 tabId,
+        RemitTypes.Tab storage tab,
+        uint64 degradationTimestamp,
+        uint96 undisputedAmount,
+        uint96 totalCharged
+    ) internal {
+        uint96 disputedAmount = totalCharged - undisputedAmount;
+        uint96 undisputedFee = 0;
+        uint96 providerUndisputed = undisputedAmount;
+        if (undisputedAmount > 0) {
+            undisputedFee = feeCalculator.calculateFee(tab.payer, undisputedAmount);
+            if (undisputedFee > undisputedAmount) undisputedFee = undisputedAmount;
+            providerUndisputed = undisputedAmount - undisputedFee;
+            feeCalculator.recordTransaction(tab.payer, undisputedAmount);
+        }
+        uint96 refund = tab.limit - totalCharged;
+
+        address payer = tab.payer;
+        address provider = tab.provider;
+
+        // --- Effects ---
+        tab.status = RemitTypes.TabStatus.PartiallyDisputed;
+        tab.totalCharged = totalCharged;
+        tab.degradationTimestamp = degradationTimestamp;
+        tab.disputedAmount = disputedAmount;
+
+        // --- Interactions ---
+        if (providerUndisputed > 0) usdc.safeTransfer(provider, providerUndisputed);
+        if (undisputedFee > 0) usdc.safeTransfer(feeRecipient, undisputedFee);
+        if (refund > 0) usdc.safeTransfer(payer, refund);
+
+        emit RemitEvents.TabPartialDispute(tabId, payer, degradationTimestamp, disputedAmount, undisputedAmount);
     }
 
     /// @dev Settle: compute fee, pay provider, refund payer, update state.

@@ -32,7 +32,7 @@ contract RemitStreamTest is Test {
     function setUp() public {
         usdc = new MockUSDC();
         feeCalc = new MockFeeCalculator();
-        stream = new RemitStream(address(usdc), address(feeCalc), feeRecipient);
+        stream = new RemitStream(address(usdc), address(feeCalc), feeRecipient, address(0));
 
         usdc.mint(payer, MINT_AMOUNT);
         vm.prank(payer);
@@ -321,14 +321,15 @@ contract RemitStreamTest is Test {
         vm.prank(payer);
         stream.openStream(STREAM_ID, payee, RATE, MAX_TOTAL);
 
-        // Payee withdraws after 100s
-        vm.warp(block.timestamp + 100);
+        // Payee withdraws after 100s. Use absolute timestamps to avoid via_ir
+        // TIMESTAMP opcode caching: setUp() has block.timestamp=1, startedAt=1.
+        vm.warp(101); // T=101, elapsed=100s
         uint96 withdrawn = uint96(uint256(RATE) * 100); // 1_000e6
         vm.prank(payee);
         stream.withdraw(STREAM_ID);
 
         // Then another 100s pass and payer closes
-        vm.warp(block.timestamp + 100);
+        vm.warp(201); // T=201, elapsed=200s
         uint96 totalStreamed = uint96(uint256(RATE) * 200); // 2_000e6
         uint96 pending = totalStreamed - withdrawn; // 1_000e6
         uint96 refund = MAX_TOTAL - totalStreamed; // 34_000e6
@@ -398,16 +399,16 @@ contract RemitStreamTest is Test {
 
     function test_constructor_revert_zeroUsdc() public {
         vm.expectRevert(RemitErrors.ZeroAddress.selector);
-        new RemitStream(address(0), address(feeCalc), feeRecipient);
+        new RemitStream(address(0), address(feeCalc), feeRecipient, address(0));
     }
 
     function test_constructor_revert_zeroFeeCalc() public {
         vm.expectRevert(RemitErrors.ZeroAddress.selector);
-        new RemitStream(address(usdc), address(0), feeRecipient);
+        new RemitStream(address(usdc), address(0), feeRecipient, address(0));
     }
 
     function test_constructor_revert_zeroFeeRecipient() public {
         vm.expectRevert(RemitErrors.ZeroAddress.selector);
-        new RemitStream(address(usdc), address(feeCalc), address(0));
+        new RemitStream(address(usdc), address(feeCalc), address(0), address(0));
     }
 }

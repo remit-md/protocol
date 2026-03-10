@@ -22,6 +22,7 @@ contract RemitBountyTest is Test {
     address internal submitter2 = makeAddr("submitter2");
     address internal feeRecipient = makeAddr("feeRecipient");
     address internal stranger = makeAddr("stranger");
+    address internal admin = makeAddr("admin");
 
     bytes32 constant BOUNTY_ID = keccak256("bounty-1");
     bytes32 constant TASK_HASH = keccak256("do the thing");
@@ -36,7 +37,7 @@ contract RemitBountyTest is Test {
     function setUp() public {
         usdc = new MockUSDC();
         feeCalc = new MockFeeCalculator();
-        bounty = new RemitBounty(address(usdc), address(feeCalc), feeRecipient);
+        bounty = new RemitBounty(address(usdc), address(feeCalc), feeRecipient, admin, address(0));
 
         usdc.mint(poster, MINT);
         vm.prank(poster);
@@ -161,9 +162,11 @@ contract RemitBountyTest is Test {
         vm.prank(submitter);
         bounty.submitBounty(BOUNTY_ID, EVIDENCE);
 
-        // Reject to reset to Open
+        // Reject + finalize to reset to Open (V2: requires dispute window)
         vm.prank(poster);
-        bounty.rejectSubmission(BOUNTY_ID, submitter);
+        bounty.rejectSubmission(BOUNTY_ID, submitter, "insufficient work");
+        vm.warp(block.timestamp + RemitTypes.BOUNTY_DISPUTE_WINDOW + 1);
+        bounty.finalizeRejection(BOUNTY_ID);
 
         // Now maxAttempts reached (attemptCount == 1 == maxAttempts)
         vm.prank(submitter2);
@@ -256,8 +259,17 @@ contract RemitBountyTest is Test {
 
         uint256 posterBefore = usdc.balanceOf(poster);
 
+        // V2: reject with reason, then finalize after dispute window
         vm.prank(poster);
-        bounty.rejectSubmission(BOUNTY_ID, submitter);
+        bounty.rejectSubmission(BOUNTY_ID, submitter, "work not done");
+
+        // Bond still in contract during dispute window
+        assertEq(usdc.balanceOf(poster), posterBefore);
+        assertEq(uint8(bounty.getBounty(BOUNTY_ID).status), uint8(RemitTypes.BountyStatus.Claimed));
+
+        // After 24h, anyone can finalize → bond forfeited to poster
+        vm.warp(block.timestamp + RemitTypes.BOUNTY_DISPUTE_WINDOW + 1);
+        bounty.finalizeRejection(BOUNTY_ID);
 
         assertEq(usdc.balanceOf(poster), posterBefore + BOND); // bond forfeited to poster
         assertEq(uint8(bounty.getBounty(BOUNTY_ID).status), uint8(RemitTypes.BountyStatus.Open));
@@ -268,11 +280,13 @@ contract RemitBountyTest is Test {
     function test_rejectSubmission_andResubmit() public {
         _postBounty(BOND, 3);
 
-        // First submitter
+        // First submitter rejected + finalize (after dispute window)
         vm.prank(submitter);
         bounty.submitBounty(BOUNTY_ID, EVIDENCE);
         vm.prank(poster);
-        bounty.rejectSubmission(BOUNTY_ID, submitter);
+        bounty.rejectSubmission(BOUNTY_ID, submitter, "not good enough");
+        vm.warp(block.timestamp + RemitTypes.BOUNTY_DISPUTE_WINDOW + 1);
+        bounty.finalizeRejection(BOUNTY_ID);
 
         // Second submitter
         vm.prank(submitter2);
@@ -289,7 +303,7 @@ contract RemitBountyTest is Test {
 
         vm.prank(stranger);
         vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
-        bounty.rejectSubmission(BOUNTY_ID, submitter);
+        bounty.rejectSubmission(BOUNTY_ID, submitter, "reason");
     }
 
     function test_rejectSubmission_revert_wrongSubmitter() public {
@@ -299,7 +313,7 @@ contract RemitBountyTest is Test {
 
         vm.prank(poster);
         vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, submitter2));
-        bounty.rejectSubmission(BOUNTY_ID, submitter2);
+        bounty.rejectSubmission(BOUNTY_ID, submitter2, "reason");
     }
 
     // =========================================================================
@@ -392,17 +406,22 @@ contract RemitBountyTest is Test {
 
     function test_constructor_revert_zeroUsdc() public {
         vm.expectRevert(RemitErrors.ZeroAddress.selector);
-        new RemitBounty(address(0), address(feeCalc), feeRecipient);
+        new RemitBounty(address(0), address(feeCalc), feeRecipient, admin, address(0));
     }
 
     function test_constructor_revert_zeroFeeCalc() public {
         vm.expectRevert(RemitErrors.ZeroAddress.selector);
-        new RemitBounty(address(usdc), address(0), feeRecipient);
+        new RemitBounty(address(usdc), address(0), feeRecipient, admin, address(0));
     }
 
     function test_constructor_revert_zeroFeeRecipient() public {
         vm.expectRevert(RemitErrors.ZeroAddress.selector);
-        new RemitBounty(address(usdc), address(feeCalc), address(0));
+        new RemitBounty(address(usdc), address(feeCalc), address(0), admin, address(0));
+    }
+
+    function test_constructor_revert_zeroAdmin() public {
+        vm.expectRevert(RemitErrors.ZeroAddress.selector);
+        new RemitBounty(address(usdc), address(feeCalc), feeRecipient, address(0), address(0));
     }
 
     // =========================================================================

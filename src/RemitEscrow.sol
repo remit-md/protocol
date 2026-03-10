@@ -10,9 +10,12 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 import {IRemitEscrow} from "./interfaces/IRemitEscrow.sol";
 import {IRemitFeeCalculator} from "./interfaces/IRemitFeeCalculator.sol";
+import {IRemitKeyRegistry} from "./interfaces/IRemitKeyRegistry.sol";
+import {IRemitArbitration} from "./interfaces/IRemitArbitration.sol";
 import {RemitTypes} from "./libraries/RemitTypes.sol";
 import {RemitErrors} from "./libraries/RemitErrors.sol";
 import {RemitEvents} from "./libraries/RemitEvents.sol";
+import {RemitKeyValidator} from "./libraries/RemitKeyValidator.sol";
 
 /// @title RemitEscrow
 /// @notice Task-based escrow payments for AI agents using USDC
@@ -37,6 +40,10 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
     IRemitFeeCalculator public immutable feeCalculator;
     address public immutable protocolAdmin;
     address public immutable feeRecipient;
+    /// @dev V2: Session key registry. address(0) = key management not enabled.
+    IRemitKeyRegistry public immutable keyRegistry;
+    /// @dev V2: Arbitration contract. address(0) = arbitration not enabled.
+    IRemitArbitration public immutable arbitrationContract;
 
     // =========================================================================
     // Storage
@@ -45,6 +52,12 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
     mapping(bytes32 => RemitTypes.Escrow) private _escrows;
     mapping(bytes32 => RemitTypes.Milestone[]) private _milestones;
     mapping(bytes32 => RemitTypes.Split[]) private _splits;
+    /// @dev V2: Dispute bond state per invoice (populated on fileDispute, deleted on resolution)
+    mapping(bytes32 => RemitTypes.DisputeBond) private _disputeBonds;
+    /// @dev V2: Number of escrows an address has created or participated in (for dispute rate calculation)
+    mapping(address => uint64) private _escrowParticipations;
+    /// @dev V2: Number of disputes an address has filed (for escalating bond multiplier)
+    mapping(address => uint64) private _disputesFiled;
 
     // =========================================================================
     // Constructor
@@ -54,9 +67,16 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
     /// @param _feeCalculator Fee calculator contract address
     /// @param _protocolAdmin Admin address for dispute resolution
     /// @param _feeRecipient Address that receives protocol fees
-    constructor(address _usdc, address _feeCalculator, address _protocolAdmin, address _feeRecipient)
-        EIP712("RemitEscrow", "1")
-    {
+    /// @param _keyRegistry V2: Session key registry (address(0) to disable)
+    /// @param _arbitrationContract V2: Arbitration contract (address(0) to disable)
+    constructor(
+        address _usdc,
+        address _feeCalculator,
+        address _protocolAdmin,
+        address _feeRecipient,
+        address _keyRegistry,
+        address _arbitrationContract
+    ) EIP712("RemitEscrow", "1") {
         if (_usdc == address(0)) revert RemitErrors.ZeroAddress();
         if (_feeCalculator == address(0)) revert RemitErrors.ZeroAddress();
         if (_protocolAdmin == address(0)) revert RemitErrors.ZeroAddress();
@@ -66,6 +86,8 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
         feeCalculator = IRemitFeeCalculator(_feeCalculator);
         protocolAdmin = _protocolAdmin;
         feeRecipient = _feeRecipient;
+        keyRegistry = IRemitKeyRegistry(_keyRegistry);
+        arbitrationContract = IRemitArbitration(_arbitrationContract);
     }
 
     // =========================================================================
@@ -88,12 +110,18 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
         if (payee == msg.sender) revert RemitErrors.SelfPayment(msg.sender);
         if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
         if (timeout <= block.timestamp) revert RemitErrors.InvalidTimeout(timeout);
+        // V2: Validate session key delegation (no-op if keyRegistry not set or caller is master key)
+        RemitKeyValidator._validateAndRecord(keyRegistry, msg.sender, amount, RemitTypes.PaymentType.ESCROW);
+        // V2: Enforce minimum timeout based on escrowed amount
+        _enforceTimeoutFloor(amount, timeout);
 
         // Validate milestone amounts sum to total
         if (milestones.length > 0) {
             uint96 milestoneSum;
             for (uint256 i; i < milestones.length; ++i) {
                 milestoneSum += milestones[i].amount;
+                // V2: Enforce per-milestone timeout floor
+                _enforceTimeoutFloor(milestones[i].amount, milestones[i].timeout);
             }
             if (milestoneSum != amount) revert RemitErrors.BelowMinimum(milestoneSum, amount);
         }
@@ -136,6 +164,9 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
             _splits[invoiceId].push(splits[i]);
         }
 
+        // Track payer participation for dispute rate calculation
+        _escrowParticipations[msg.sender]++;
+
         // --- Interactions ---
         usdc.safeTransferFrom(msg.sender, address(this), amount);
 
@@ -152,6 +183,9 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
         // --- Effects ---
         escrow.claimStarted = true;
         escrow.status = RemitTypes.EscrowStatus.Active;
+
+        // Track payee participation for dispute rate calculation
+        _escrowParticipations[msg.sender]++;
 
         emit RemitEvents.ClaimStartConfirmed(invoiceId, msg.sender, uint64(block.timestamp));
     }
@@ -386,25 +420,133 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
     }
 
     /// @inheritdoc IRemitEscrow
-    function freezeEscrow(bytes32 invoiceId) external {
-        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
-
+    /// @dev V2: Permissionless dispute filing with bond deposit. Replaces admin-only freezeEscrow.
+    ///      CEI: validate → calculate bond → update state → transfer bond in
+    function fileDispute(bytes32 invoiceId, bytes32 evidenceHash) external nonReentrant {
         RemitTypes.Escrow storage escrow = _getEscrow(invoiceId);
 
+        // --- Checks ---
+        if (msg.sender != escrow.payer && msg.sender != escrow.payee) revert RemitErrors.Unauthorized(msg.sender);
         if (escrow.status == RemitTypes.EscrowStatus.Disputed) revert RemitErrors.DisputeAlreadyFiled(invoiceId);
         if (escrow.status != RemitTypes.EscrowStatus.Funded && escrow.status != RemitTypes.EscrowStatus.Active) {
             revert RemitErrors.EscrowFrozen(invoiceId);
         }
+        if (evidenceHash == bytes32(0)) revert RemitErrors.ZeroAmount();
+
+        uint96 bond = _calculateBond(msg.sender, escrow.amount);
 
         // --- Effects ---
         escrow.status = RemitTypes.EscrowStatus.Disputed;
+        _disputeBonds[invoiceId] = RemitTypes.DisputeBond({
+            filer: msg.sender,
+            filerBond: bond,
+            respondentBond: 0,
+            counterBondDeadline: uint64(block.timestamp) + RemitTypes.COUNTER_BOND_WINDOW,
+            respondentPosted: false
+        });
+        _disputesFiled[msg.sender]++;
 
-        emit RemitEvents.EscrowDisputed(invoiceId, msg.sender, bytes32(0));
+        // --- Interactions ---
+        if (bond > 0) usdc.safeTransferFrom(msg.sender, address(this), bond);
+
+        emit RemitEvents.EscrowDisputed(invoiceId, msg.sender, evidenceHash);
+        emit RemitEvents.DisputeBondPosted(invoiceId, msg.sender, bond);
     }
 
     /// @inheritdoc IRemitEscrow
-    /// @dev Admin splits funds between payer and payee. payerAmount + payeeAmount must equal amount.
-    function resolveDispute(bytes32 invoiceId, uint96 payerAmount, uint96 payeeAmount) external nonReentrant {
+    /// @dev CEI: validate → update state → transfer bond in
+    function postCounterBond(bytes32 invoiceId) external nonReentrant {
+        RemitTypes.Escrow storage escrow = _getEscrow(invoiceId);
+        RemitTypes.DisputeBond storage bond = _disputeBonds[invoiceId];
+
+        // --- Checks ---
+        if (escrow.status != RemitTypes.EscrowStatus.Disputed) revert RemitErrors.EscrowFrozen(invoiceId);
+        if (bond.respondentPosted) revert RemitErrors.DisputeAlreadyFiled(invoiceId);
+        address respondent = (bond.filer == escrow.payer) ? escrow.payee : escrow.payer;
+        if (msg.sender != respondent) revert RemitErrors.Unauthorized(msg.sender);
+        if (block.timestamp > bond.counterBondDeadline) revert RemitErrors.InvalidTimeout(bond.counterBondDeadline);
+
+        uint96 counterBond = bond.filerBond; // respondent matches filer's current bond
+
+        // --- Effects ---
+        bond.respondentBond = counterBond;
+        bond.respondentPosted = true;
+
+        // --- Interactions ---
+        if (counterBond > 0) usdc.safeTransferFrom(msg.sender, address(this), counterBond);
+
+        emit RemitEvents.CounterBondPosted(invoiceId, respondent, counterBond);
+    }
+
+    /// @inheritdoc IRemitEscrow
+    /// @dev CEI: validate → snapshot → set Completed → distribute
+    function claimDefaultWin(bytes32 invoiceId) external nonReentrant {
+        RemitTypes.Escrow storage escrow = _getEscrow(invoiceId);
+        RemitTypes.DisputeBond storage bond = _disputeBonds[invoiceId];
+
+        // --- Checks ---
+        if (escrow.status != RemitTypes.EscrowStatus.Disputed) revert RemitErrors.EscrowFrozen(invoiceId);
+        if (bond.respondentPosted) revert RemitErrors.DisputeAlreadyFiled(invoiceId);
+        if (msg.sender != bond.filer) revert RemitErrors.Unauthorized(msg.sender);
+        if (block.timestamp <= bond.counterBondDeadline) revert RemitErrors.InvalidTimeout(bond.counterBondDeadline);
+
+        uint96 escrowAmount = escrow.amount;
+        uint96 fee = escrow.feeAmount;
+        address payer = escrow.payer;
+        address payee = escrow.payee;
+        uint96 filerBond = bond.filerBond;
+        bool filerIsPayer = (bond.filer == payer);
+
+        // --- Effects ---
+        escrow.status = RemitTypes.EscrowStatus.Completed;
+        delete _disputeBonds[invoiceId];
+
+        // --- Interactions ---
+        if (filerBond > 0) usdc.safeTransfer(msg.sender, filerBond); // return filer's bond
+
+        if (filerIsPayer) {
+            // Payer won by default: full refund (no fee, work was never verified)
+            usdc.safeTransfer(payer, escrowAmount);
+        } else {
+            // Payee won by default: amount minus fee
+            usdc.safeTransfer(payee, escrowAmount - fee);
+            if (fee > 0) usdc.safeTransfer(feeRecipient, fee);
+        }
+
+        emit RemitEvents.DisputeBondReturned(invoiceId, msg.sender, filerBond);
+        emit RemitEvents.DisputeDefaultWin(invoiceId, msg.sender, filerBond, escrowAmount);
+    }
+
+    /// @inheritdoc IRemitEscrow
+    /// @dev CEI: validate → update state → transfer additional bond in
+    function increaseBond(bytes32 invoiceId, uint96 additionalAmount) external nonReentrant {
+        RemitTypes.Escrow storage escrow = _getEscrow(invoiceId);
+        RemitTypes.DisputeBond storage bond = _disputeBonds[invoiceId];
+
+        // --- Checks ---
+        if (escrow.status != RemitTypes.EscrowStatus.Disputed) revert RemitErrors.EscrowFrozen(invoiceId);
+        if (msg.sender != bond.filer) revert RemitErrors.Unauthorized(msg.sender);
+        if (bond.respondentPosted) revert RemitErrors.DisputeAlreadyFiled(invoiceId); // locked after counter-bond
+        if (block.timestamp > bond.counterBondDeadline) revert RemitErrors.InvalidTimeout(bond.counterBondDeadline);
+        if (additionalAmount == 0) revert RemitErrors.ZeroAmount();
+
+        // --- Effects ---
+        bond.filerBond += additionalAmount;
+
+        // --- Interactions ---
+        usdc.safeTransferFrom(msg.sender, address(this), additionalAmount);
+
+        emit RemitEvents.BondIncreased(invoiceId, msg.sender, additionalAmount, bond.filerBond);
+    }
+
+    /// @inheritdoc IRemitEscrow
+    /// @dev Admin splits funds between payer and payee, with bond forfeiture based on who wins.
+    ///      Winner's bond returned; loser's bond forfeited to feeRecipient.
+    ///      CEI: validate → snapshot → set Completed → distribute funds and bonds
+    function resolveDispute(bytes32 invoiceId, uint96 payerAmount, uint96 payeeAmount, bool payeeWins)
+        external
+        nonReentrant
+    {
         if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
 
         RemitTypes.Escrow storage escrow = _getEscrow(invoiceId);
@@ -416,15 +558,121 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
             revert RemitErrors.InsufficientBalance(amount, payerAmount + payeeAmount);
         }
 
+        RemitTypes.DisputeBond memory bond = _disputeBonds[invoiceId];
         address payer = escrow.payer;
         address payee = escrow.payee;
+        address winner = payeeWins ? payee : payer;
+        address loser = payeeWins ? payer : payee;
 
         // --- Effects ---
         escrow.status = RemitTypes.EscrowStatus.Completed;
+        delete _disputeBonds[invoiceId];
 
         // --- Interactions ---
+        // Distribute escrow funds
         if (payerAmount > 0) usdc.safeTransfer(payer, payerAmount);
         if (payeeAmount > 0) usdc.safeTransfer(payee, payeeAmount);
+
+        // Handle bonds: winner gets their bond back, loser's bond goes to protocol
+        if (winner == bond.filer) {
+            // Winner filed the dispute
+            if (bond.filerBond > 0) {
+                usdc.safeTransfer(winner, bond.filerBond);
+                emit RemitEvents.DisputeBondReturned(invoiceId, winner, bond.filerBond);
+            }
+            if (bond.respondentBond > 0) {
+                usdc.safeTransfer(feeRecipient, bond.respondentBond);
+                emit RemitEvents.DisputeBondForfeited(invoiceId, loser, bond.respondentBond);
+            }
+        } else {
+            // Loser filed the dispute — forfeit their bond
+            if (bond.filerBond > 0) {
+                usdc.safeTransfer(feeRecipient, bond.filerBond);
+                emit RemitEvents.DisputeBondForfeited(invoiceId, loser, bond.filerBond);
+            }
+            // Winner (respondent) gets their bond back
+            if (bond.respondentBond > 0) {
+                usdc.safeTransfer(winner, bond.respondentBond);
+                emit RemitEvents.DisputeBondReturned(invoiceId, winner, bond.respondentBond);
+            }
+        }
+
+        emit RemitEvents.DisputeResolved(invoiceId, payerAmount, payeeAmount);
+    }
+
+    // =========================================================================
+    // V2: Arbitration Integration
+    // =========================================================================
+
+    /// @inheritdoc IRemitEscrow
+    /// @dev Permissionless: callable by anyone once both bonds are posted and counter-bond
+    ///      deadline has passed without admin resolution. Routes to RemitArbitration for
+    ///      tiered arbitrator selection.
+    function escalateToArbitration(bytes32 invoiceId) external {
+        if (address(arbitrationContract) == address(0)) revert RemitErrors.NotArbitrationContract(address(0));
+
+        RemitTypes.Escrow storage escrow = _getEscrow(invoiceId);
+        RemitTypes.DisputeBond storage bond = _disputeBonds[invoiceId];
+
+        // --- Checks ---
+        if (escrow.status != RemitTypes.EscrowStatus.Disputed) revert RemitErrors.EscrowFrozen(invoiceId);
+        if (!bond.respondentPosted) revert RemitErrors.EscalationNotReady(bond.counterBondDeadline);
+        // Allow escalation after counter-bond deadline (admin should have resolved by then)
+        if (block.timestamp <= bond.counterBondDeadline) {
+            revert RemitErrors.EscalationNotReady(bond.counterBondDeadline);
+        }
+
+        address payer = escrow.payer;
+        address payee = escrow.payee;
+        uint96 amount = escrow.amount;
+
+        // --- Interactions (arbitration contract is trusted, not a reentry risk here) ---
+        arbitrationContract.routeDispute(invoiceId, payer, payee, amount);
+    }
+
+    /// @inheritdoc IRemitEscrow
+    /// @dev Only callable by the authorized arbitration contract after renderDecision().
+    ///      Distributes escrow funds per arbitration percentages and handles bond forfeiture.
+    ///      CEI: validate → snapshot → set Completed → distribute funds and bonds
+    function resolveDisputeArbitration(
+        bytes32 invoiceId,
+        uint8 payerPercent,
+        uint8 payeePercent,
+        address arbitrator,
+        uint96 arbitratorFee
+    ) external nonReentrant {
+        if (msg.sender != address(arbitrationContract)) {
+            revert RemitErrors.NotArbitrationContract(msg.sender);
+        }
+
+        RemitTypes.Escrow storage escrow = _getEscrow(invoiceId);
+        if (escrow.status != RemitTypes.EscrowStatus.Disputed) revert RemitErrors.EscrowFrozen(invoiceId);
+        if (uint256(payerPercent) + uint256(payeePercent) != 100) {
+            revert RemitErrors.InvalidPercentageSum(payerPercent, payeePercent);
+        }
+
+        uint96 amount = escrow.amount;
+        address payer = escrow.payer;
+        address payee = escrow.payee;
+        RemitTypes.DisputeBond memory bond = _disputeBonds[invoiceId];
+
+        // Compute fund distribution: split proportionally, no protocol fee on dispute resolution
+        // (consistent with resolveDispute — admin specifies splits without fee deduction).
+        // Arbitrator fee comes from loser's bond, not from escrow principal.
+        uint96 payerAmount = uint96((uint256(amount) * payerPercent) / 100);
+        uint96 payeeAmount = amount - payerAmount;
+
+        // --- Effects ---
+        escrow.status = RemitTypes.EscrowStatus.Completed;
+        delete _disputeBonds[invoiceId];
+
+        // --- Interactions ---
+        // Distribute escrow principal
+        if (payerAmount > 0) usdc.safeTransfer(payer, payerAmount);
+        if (payeeAmount > 0) usdc.safeTransfer(payee, payeeAmount);
+
+        // Handle bonds: winner's bond returned, loser's bond → arbitrator fee + remainder to protocol
+        _settleBonds(bond, payer, payee, payerPercent, payeePercent, arbitrator, arbitratorFee);
 
         emit RemitEvents.DisputeResolved(invoiceId, payerAmount, payeeAmount);
     }
@@ -436,6 +684,11 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
     /// @inheritdoc IRemitEscrow
     function getEscrow(bytes32 invoiceId) external view returns (RemitTypes.Escrow memory) {
         return _escrows[invoiceId];
+    }
+
+    /// @inheritdoc IRemitEscrow
+    function getDisputeBond(bytes32 invoiceId) external view returns (RemitTypes.DisputeBond memory) {
+        return _disputeBonds[invoiceId];
     }
 
     /// @inheritdoc IRemitEscrow
@@ -474,10 +727,113 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
     // Internal Helpers
     // =========================================================================
 
+    /// @dev Distribute dispute bonds after arbitration decision.
+    ///      50/50 split: both bonds returned (minus half of arbitratorFee each).
+    ///      Decisive win: winner's bond returned; loser's bond → arbitratorFee, remainder to protocol.
+    function _settleBonds(
+        RemitTypes.DisputeBond memory bond,
+        address payer,
+        address payee,
+        uint8 payerPercent,
+        uint8 payeePercent,
+        address arbitrator,
+        uint96 arbitratorFee
+    ) internal {
+        if (payerPercent == payeePercent) {
+            // 50/50 — symmetric: split arbitratorFee between both bonds
+            uint96 halfFee = arbitratorFee / 2;
+
+            // Return filer's bond minus half-fee
+            if (bond.filerBond > 0) {
+                uint96 feeFromFiler = halfFee > bond.filerBond ? bond.filerBond : halfFee;
+                uint96 filerReturn = bond.filerBond - feeFromFiler;
+                if (filerReturn > 0) usdc.safeTransfer(bond.filer, filerReturn);
+                if (feeFromFiler > 0 && arbitrator != address(0)) usdc.safeTransfer(arbitrator, feeFromFiler);
+            }
+
+            // Return respondent's bond minus half-fee
+            address respondent = (bond.filer == payer) ? payee : payer;
+            if (bond.respondentBond > 0) {
+                uint96 feeFromRespondent =
+                    (arbitratorFee - halfFee) > bond.respondentBond ? bond.respondentBond : (arbitratorFee - halfFee);
+                uint96 respondentReturn = bond.respondentBond - feeFromRespondent;
+                if (respondentReturn > 0) usdc.safeTransfer(respondent, respondentReturn);
+                if (feeFromRespondent > 0 && arbitrator != address(0)) {
+                    usdc.safeTransfer(arbitrator, feeFromRespondent);
+                }
+            }
+        } else {
+            // Decisive outcome — determine winner and loser
+            bool payerWins = (payerPercent > payeePercent);
+            address winner = payerWins ? payer : payee;
+            address loser = payerWins ? payee : payer;
+
+            bool filerWins = (bond.filer == winner);
+            uint96 winnerBond = filerWins ? bond.filerBond : bond.respondentBond;
+            uint96 loserBond = filerWins ? bond.respondentBond : bond.filerBond;
+
+            // Return winner's bond in full
+            if (winnerBond > 0) {
+                usdc.safeTransfer(winner, winnerBond);
+                emit RemitEvents.DisputeBondReturned(bytes32(0), winner, winnerBond);
+            }
+
+            // Loser's bond → arbitrator fee + remainder to protocol
+            if (loserBond > 0) {
+                uint96 toArbitrator = arbitratorFee > loserBond ? loserBond : arbitratorFee;
+                uint96 toProtocol = loserBond - toArbitrator;
+                if (toArbitrator > 0 && arbitrator != address(0)) usdc.safeTransfer(arbitrator, toArbitrator);
+                if (toProtocol > 0) usdc.safeTransfer(feeRecipient, toProtocol);
+                emit RemitEvents.DisputeBondForfeited(bytes32(0), loser, loserBond);
+            }
+        }
+    }
+
     /// @dev Revert if escrow does not exist (payer == address(0) means not created)
     function _getEscrow(bytes32 invoiceId) internal view returns (RemitTypes.Escrow storage) {
         RemitTypes.Escrow storage escrow = _escrows[invoiceId];
         if (escrow.payer == address(0)) revert RemitErrors.EscrowNotFound(invoiceId);
         return escrow;
+    }
+
+    /// @dev Calculates the required dispute bond for a given filer and escrow amount.
+    ///      baseBond = max(5% of amount, $0.50) × dispute_rate multiplier
+    function _calculateBond(address filer, uint96 amount) internal view returns (uint96) {
+        uint96 baseBond = uint96((uint256(amount) * RemitTypes.DISPUTE_BOND_BPS) / 10_000);
+        if (baseBond < RemitTypes.DISPUTE_BOND_MIN) baseBond = RemitTypes.DISPUTE_BOND_MIN;
+        uint96 multiplier = _getDisputeMultiplier(filer);
+        return baseBond * multiplier;
+    }
+
+    /// @dev Returns the bond multiplier based on the filer's historical dispute rate.
+    ///      <5%→1x  5-10%→2x  10-20%→4x  >20%→8x
+    function _getDisputeMultiplier(address filer) internal view returns (uint96) {
+        uint64 participations = _escrowParticipations[filer];
+        if (participations == 0) return 1;
+        uint64 disputes = _disputesFiled[filer];
+        // rate100 is dispute percentage (e.g. 10 = 10%, 5 = 5%)
+        uint64 rate100 = (disputes * 100) / participations;
+        if (rate100 < 5) return 1;
+        if (rate100 < 10) return 2;
+        if (rate100 < 20) return 4;
+        return 8;
+    }
+
+    /// @dev Returns the minimum timeout duration (in seconds) required for a given USDC amount.
+    function _timeoutFloor(uint256 amount) internal pure returns (uint64) {
+        if (amount < RemitTypes.TIMEOUT_TIER_10) return RemitTypes.TIMEOUT_FLOOR_UNDER_10;
+        if (amount < RemitTypes.TIMEOUT_TIER_100) return RemitTypes.TIMEOUT_FLOOR_10_TO_100;
+        if (amount < RemitTypes.TIMEOUT_TIER_1K) return RemitTypes.TIMEOUT_FLOOR_100_TO_1K;
+        return RemitTypes.TIMEOUT_FLOOR_OVER_1K;
+    }
+
+    /// @dev Revert with TimeoutBelowFloor if the given unix-timestamp timeout is below the
+    ///      minimum required duration from now for the given amount.
+    function _enforceTimeoutFloor(uint256 amount, uint64 timeout) internal view {
+        uint64 floor = _timeoutFloor(amount);
+        uint64 minTimeout = uint64(block.timestamp) + floor;
+        if (timeout < minTimeout) {
+            revert RemitErrors.TimeoutBelowFloor(timeout, minTimeout);
+        }
     }
 }

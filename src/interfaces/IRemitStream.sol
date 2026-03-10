@@ -25,6 +25,12 @@ interface IRemitStream {
     /// @dev Either party. Payee gets accrued, payer gets remainder. Emits StreamClosed.
     function closeStream(bytes32 streamId) external;
 
+    /// @notice V2: Check stream balance and emit StreamBalanceWarning or auto-terminate.
+    ///         Callable by anyone (payer, payee, keeper). Emits StreamBalanceWarning if
+    ///         remaining < 5 * ratePerSecond, or StreamTerminatedInsufficientBalance if depleted.
+    /// @param streamId The stream ID
+    function settle(bytes32 streamId) external;
+
     // === View Functions ===
 
     function getStream(bytes32 streamId) external view returns (RemitTypes.Stream memory);

@@ -41,7 +41,8 @@ contract RemitTabTest is Test {
 
         usdc = new MockUSDC();
         feeCalc = new MockFeeCalculator();
-        tab = new RemitTab(address(usdc), address(feeCalc), feeRecipient);
+        address tabAdmin = makeAddr("tabAdmin");
+        tab = new RemitTab(address(usdc), address(feeCalc), feeRecipient, tabAdmin, address(0));
 
         // Fund payer and approve
         usdc.mint(payer, 10_000e6);

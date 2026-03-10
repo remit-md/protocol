@@ -617,50 +617,68 @@ contract RemitEscrowTest is TestBase {
     }
 
     // =========================================================================
-    // freezeEscrow / resolveDispute
+    // fileDispute / postCounterBond / resolveDispute
     // =========================================================================
 
-    function test_freezeEscrow_happyPath() public {
+    function test_fileDispute_happyPath() public {
         _createAndActivate(INV);
+        bytes32 evidenceHash = keccak256("evidence");
 
         vm.expectEmit(true, true, false, false);
-        emit RemitEvents.EscrowDisputed(INV, admin, bytes32(0));
+        emit RemitEvents.EscrowDisputed(INV, payer, evidenceHash);
 
-        vm.prank(admin);
-        escrow.freezeEscrow(INV);
+        vm.prank(payer);
+        escrow.fileDispute(INV, evidenceHash);
 
         RemitTypes.Escrow memory e = escrow.getEscrow(INV);
         assertEq(uint8(e.status), uint8(RemitTypes.EscrowStatus.Disputed));
+
+        // Bond posted: 5% of AMOUNT = 5_000_000
+        RemitTypes.DisputeBond memory b = escrow.getDisputeBond(INV);
+        assertEq(b.filer, payer);
+        assertEq(b.filerBond, 5_000_000);
     }
 
-    function test_freezeEscrow_revertsIfNotAdmin() public {
+    function test_fileDispute_revert_stranger() public {
         _createAndActivate(INV);
+        bytes32 evidenceHash = keccak256("evidence");
 
         vm.prank(stranger);
         vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
-        escrow.freezeEscrow(INV);
+        escrow.fileDispute(INV, evidenceHash);
     }
 
     function test_resolveDispute_happyPath() public {
         _createAndActivate(INV);
+        bytes32 evidenceHash = keccak256("evidence");
 
-        vm.prank(admin);
-        escrow.freezeEscrow(INV);
+        // Payer files dispute (bond = 5% of AMOUNT = 5_000_000)
+        vm.prank(payer);
+        escrow.fileDispute(INV, evidenceHash);
+
+        // Payee posts counter-bond (same amount = 5_000_000)
+        vm.prank(payee);
+        escrow.postCounterBond(INV);
 
         uint96 payerAmt = 40e6;
         uint96 payeeAmt = 60e6;
+        uint96 bond = 5_000_000; // 5% of AMOUNT
 
         uint256 payerBefore = usdc.balanceOf(payer);
         uint256 payeeBefore = usdc.balanceOf(payee);
+        uint256 feeBefore = usdc.balanceOf(feeRecipient);
 
         vm.expectEmit(true, false, false, true);
         emit RemitEvents.DisputeResolved(INV, payerAmt, payeeAmt);
 
+        // payeeWins=true: payee wins, payer(filer) forfeits bond, payee(respondent) gets bond back
         vm.prank(admin);
-        escrow.resolveDispute(INV, payerAmt, payeeAmt);
+        escrow.resolveDispute(INV, payerAmt, payeeAmt, true);
 
-        assertEq(usdc.balanceOf(payer), payerBefore + payerAmt);
-        assertEq(usdc.balanceOf(payee), payeeBefore + payeeAmt);
+        assertEq(usdc.balanceOf(payer), payerBefore + payerAmt); // payer gets escrow share only (bond forfeited)
+        assertEq(usdc.balanceOf(payee), payeeBefore + payeeAmt + bond); // payee gets escrow share + bond back
+        assertEq(usdc.balanceOf(feeRecipient), feeBefore + bond); // feeRecipient receives forfeited bond
+        assertEq(usdc.balanceOf(address(escrow)), 0);
 
         RemitTypes.Escrow memory e = escrow.getEscrow(INV);
         assertEq(uint8(e.status), uint8(RemitTypes.EscrowStatus.Completed));
@@ -668,13 +686,14 @@ contract RemitEscrowTest is TestBase {
 
     function test_resolveDispute_revertsIfAmountMismatch() public {
         _createAndActivate(INV);
+        bytes32 evidenceHash = keccak256("evidence");
 
-        vm.prank(admin);
-        escrow.freezeEscrow(INV);
+        vm.prank(payer);
+        escrow.fileDispute(INV, evidenceHash);
 
         vm.prank(admin);
         vm.expectRevert(); // InsufficientBalance
-        escrow.resolveDispute(INV, 40e6, 40e6); // sum != AMOUNT
+        escrow.resolveDispute(INV, 40e6, 40e6, true); // sum != AMOUNT
     }
 
     function test_resolveDispute_revertsIfNotDisputed() public {
@@ -682,7 +701,7 @@ contract RemitEscrowTest is TestBase {
 
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(RemitErrors.EscrowFrozen.selector, INV));
-        escrow.resolveDispute(INV, 50e6, 50e6);
+        escrow.resolveDispute(INV, 50e6, 50e6, true);
     }
 
     // =========================================================================

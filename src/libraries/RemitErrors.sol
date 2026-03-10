@@ -51,4 +51,37 @@ library RemitErrors {
     error ZeroAddress();
     error ZeroAmount();
     error InvalidTimeout(uint64 timeout);
+
+    // V2: Escrow timeout floors
+    error TimeoutBelowFloor(uint64 timeout, uint64 floor);
+
+    // V2: Session key / delegation
+    error DelegationExpired(address sessionKey);
+    error DelegationLimitExceeded(address sessionKey, uint256 amount, uint256 limit);
+    error DelegationNotFound(address sessionKey);
+
+    // V2: Streaming balance depletion
+    error StreamTerminated(bytes32 streamId);
+
+    // V2: Bounty
+    error BountyRejectionNoReason(bytes32 bountyId);
+
+    // V2: Dispute bonds
+    error DisputeBondInsufficient(uint256 provided, uint256 required);
+
+    // V2: Arbitration
+    error ArbitratorNotFound(address wallet);
+    error ArbitratorAlreadyRegistered(address wallet);
+    error ArbitratorBondInsufficient(uint256 provided, uint256 required);
+    error ArbitrationCaseNotFound(bytes32 invoiceId);
+    error ArbitrationCaseAlreadyExists(bytes32 invoiceId);
+    error StrikeAlreadyCast(bytes32 invoiceId);
+    error InvalidPercentageSum(uint8 payerPercent, uint8 payeePercent);
+    error ArbitrationDeadlinePassed(bytes32 invoiceId);
+    error PoolTooSmall(uint256 available, uint256 required);
+    error EscalationNotReady(uint64 deadline);
+    error NotArbitrationContract(address caller);
+    error ArbitrationCooldownNotMet(uint64 releaseAt);
+    error ArbitratorNotAssigned(bytes32 invoiceId, address caller);
+    error ArbitrationAlreadyDecided(bytes32 invoiceId);
 }

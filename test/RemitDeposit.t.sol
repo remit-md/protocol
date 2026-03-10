@@ -27,7 +27,7 @@ contract RemitDepositTest is Test {
 
     function setUp() public {
         usdc = new MockUSDC();
-        deposit = new RemitDeposit(address(usdc));
+        deposit = new RemitDeposit(address(usdc), address(0));
 
         usdc.mint(depositor, MINT);
         vm.prank(depositor);
@@ -265,7 +265,7 @@ contract RemitDepositTest is Test {
 
     function test_constructor_revert_zeroUsdc() public {
         vm.expectRevert(RemitErrors.ZeroAddress.selector);
-        new RemitDeposit(address(0));
+        new RemitDeposit(address(0), address(0));
     }
 
     // =========================================================================
