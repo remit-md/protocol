@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+export PATH="/c/Users/jj/.foundry/bin:/c/Users/jj/.cargo/bin:$PATH"
 
 echo "=== Pre-commit: remit-protocol ==="
 

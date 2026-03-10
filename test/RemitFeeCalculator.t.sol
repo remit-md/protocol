@@ -282,9 +282,9 @@ contract RemitFeeCalculatorTest is Test {
 
     /// @dev Fee is always <= amount (can never drain more than was sent).
     function testFuzz_fee_neverExceedsAmount(uint96 amount, uint96 volume) public {
-        // Cap volume to avoid overflow when adding to storage.
+        // Bound amount first (minimum 1), then cap volume to avoid overflow.
+        amount = uint96(bound(amount, 1, type(uint96).max));
         volume = uint96(bound(volume, 0, type(uint96).max - amount));
-        amount = uint96(bound(amount, 1, type(uint96).max - volume));
 
         if (volume > 0) {
             vm.prank(caller);
