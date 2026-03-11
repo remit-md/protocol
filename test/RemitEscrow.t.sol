@@ -745,4 +745,69 @@ contract RemitEscrowTest is TestBase {
         vm.expectRevert(abi.encodeWithSelector(RemitErrors.EscrowNotFound.selector, INV));
         escrow.releaseEscrow(INV);
     }
+
+    // =========================================================================
+    // pause / unpause
+    // =========================================================================
+
+    function test_pause_byAdmin_succeeds() public {
+        vm.prank(admin);
+        escrow.pause();
+        assertTrue(escrow.paused(), "contract must be paused after admin pause()");
+    }
+
+    function test_pause_byStranger_reverts() public {
+        address stranger = makeAddr("stranger");
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        escrow.pause();
+    }
+
+    function test_unpause_byAdmin_succeeds() public {
+        vm.prank(admin);
+        escrow.pause();
+
+        vm.prank(admin);
+        escrow.unpause();
+        assertFalse(escrow.paused(), "contract must be unpaused after admin unpause()");
+    }
+
+    function test_unpause_byStranger_reverts() public {
+        vm.prank(admin);
+        escrow.pause();
+
+        address stranger = makeAddr("stranger");
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        escrow.unpause();
+    }
+
+    function test_createEscrow_revert_whenPaused() public {
+        vm.prank(admin);
+        escrow.pause();
+
+        vm.prank(payer);
+        vm.expectRevert(abi.encodeWithSignature("EnforcedPause()"));
+        escrow.createEscrow(
+            INV,
+            payee,
+            AMOUNT,
+            uint64(block.timestamp + TIMEOUT_DELTA),
+            new RemitTypes.Milestone[](0),
+            new RemitTypes.Split[](0)
+        );
+    }
+
+    function test_createEscrow_works_afterUnpause() public {
+        vm.prank(admin);
+        escrow.pause();
+
+        vm.prank(admin);
+        escrow.unpause();
+
+        // Should succeed after unpause
+        _createEscrow(INV);
+        RemitTypes.Escrow memory e = escrow.getEscrow(INV);
+        assertEq(uint8(e.status), uint8(RemitTypes.EscrowStatus.Funded));
+    }
 }
