@@ -394,6 +394,141 @@ contract RemitStreamTest is Test {
     }
 
     // =========================================================================
+    // settle
+    // =========================================================================
+
+    function test_settle_exhausted_autoTerminatesAndPaysOut() public {
+        vm.prank(payer);
+        stream.openStream(STREAM_ID, payee, RATE, MAX_TOTAL);
+
+        // Warp to full exhaustion: elapsed = 3600s → totalStreamed = MAX_TOTAL, remaining = 0
+        vm.warp(block.timestamp + 3600);
+
+        // MockFeeCalculator: 1% on pending
+        uint96 fee = MAX_TOTAL / 100;
+        uint96 payeeGets = MAX_TOTAL - fee;
+
+        uint96 payeeBefore = uint96(usdc.balanceOf(payee));
+
+        vm.expectEmit(true, true, true, true);
+        emit RemitEvents.StreamTerminatedInsufficientBalance(STREAM_ID, payer, payee, MAX_TOTAL, fee);
+
+        stream.settle(STREAM_ID); // callable by anyone
+
+        RemitTypes.Stream memory s = stream.getStream(STREAM_ID);
+        assertEq(uint8(s.status), uint8(RemitTypes.StreamStatus.Terminated));
+        assertGt(s.closedAt, 0);
+
+        assertEq(usdc.balanceOf(payee), payeeBefore + payeeGets);
+        assertEq(usdc.balanceOf(feeRecipient), fee);
+        assertEq(usdc.balanceOf(address(stream)), 0);
+        assertEq(usdc.balanceOf(payer), MINT_AMOUNT - MAX_TOTAL); // locked maxTotal, no refund
+    }
+
+    function test_settle_exhausted_feeOnlyOnPending() public {
+        vm.prank(payer);
+        stream.openStream(STREAM_ID, payee, RATE, MAX_TOTAL);
+
+        // Payee withdraws after 100s. Use absolute timestamps (Foundry startedAt = 1).
+        vm.warp(101); // T=101, elapsed=100s
+        uint96 withdrawn = uint96(uint256(RATE) * 100); // 1_000e6
+        vm.prank(payee);
+        stream.withdraw(STREAM_ID);
+
+        // Warp to full exhaustion (elapsed = 3600s from startedAt = 1)
+        vm.warp(3601); // T=3601
+
+        uint96 pending = MAX_TOTAL - withdrawn; // 35_000e6
+        uint96 fee = pending / 100; // 1% of pending only
+        uint96 payeeGets = pending - fee;
+
+        uint96 payeeBefore = uint96(usdc.balanceOf(payee));
+
+        vm.expectEmit(true, true, true, true);
+        emit RemitEvents.StreamTerminatedInsufficientBalance(STREAM_ID, payer, payee, MAX_TOTAL, fee);
+
+        stream.settle(STREAM_ID);
+
+        assertEq(usdc.balanceOf(payee), payeeBefore + payeeGets);
+        assertEq(usdc.balanceOf(feeRecipient), fee);
+        assertEq(usdc.balanceOf(address(stream)), 0);
+    }
+
+    function test_settle_callableByStranger() public {
+        vm.prank(payer);
+        stream.openStream(STREAM_ID, payee, RATE, MAX_TOTAL);
+        vm.warp(block.timestamp + 3600); // exhaust
+
+        vm.prank(stranger); // not payer or payee
+        stream.settle(STREAM_ID);
+
+        assertEq(uint8(stream.getStream(STREAM_ID).status), uint8(RemitTypes.StreamStatus.Terminated));
+    }
+
+    function test_settle_nearlyExhausted_emitsWarning() public {
+        vm.prank(payer);
+        stream.openStream(STREAM_ID, payee, RATE, MAX_TOTAL);
+
+        // elapsed = 3596s → totalStreamed = 35_960e6, remaining = 40e6 < 5*RATE (50e6)
+        // secondsRemaining = 40e6 / 10e6 = 4
+        vm.warp(block.timestamp + 3596);
+        uint96 remaining = MAX_TOTAL - uint96(uint256(RATE) * 3596); // 40e6
+        uint64 secondsRemaining = uint64(remaining / RATE); // 4
+
+        vm.expectEmit(true, true, false, true);
+        emit RemitEvents.StreamBalanceWarning(STREAM_ID, payer, remaining, RATE, secondsRemaining);
+
+        stream.settle(STREAM_ID);
+
+        // No state change
+        RemitTypes.Stream memory s = stream.getStream(STREAM_ID);
+        assertEq(uint8(s.status), uint8(RemitTypes.StreamStatus.Active));
+        assertEq(s.closedAt, 0);
+    }
+
+    function test_settle_healthyStream_noOpNoStateChange() public {
+        vm.prank(payer);
+        stream.openStream(STREAM_ID, payee, RATE, MAX_TOTAL);
+
+        // After 100s: remaining = 35_000e6 >> 5*RATE (50e6) → no-op
+        vm.warp(block.timestamp + 100);
+
+        stream.settle(STREAM_ID);
+
+        RemitTypes.Stream memory s = stream.getStream(STREAM_ID);
+        assertEq(uint8(s.status), uint8(RemitTypes.StreamStatus.Active));
+        assertEq(s.closedAt, 0);
+        assertEq(s.withdrawn, 0);
+        assertEq(usdc.balanceOf(address(stream)), MAX_TOTAL); // funds untouched
+    }
+
+    function test_settle_revert_notFound() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.StreamNotFound.selector, STREAM_ID));
+        stream.settle(STREAM_ID);
+    }
+
+    function test_settle_revert_alreadyClosed() public {
+        vm.prank(payer);
+        stream.openStream(STREAM_ID, payee, RATE, MAX_TOTAL);
+        vm.warp(block.timestamp + 100);
+        vm.prank(payer);
+        stream.closeStream(STREAM_ID);
+
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.AlreadyClosed.selector, STREAM_ID));
+        stream.settle(STREAM_ID);
+    }
+
+    function test_settle_revert_alreadyTerminated() public {
+        vm.prank(payer);
+        stream.openStream(STREAM_ID, payee, RATE, MAX_TOTAL);
+        vm.warp(block.timestamp + 3600); // exhaust
+        stream.settle(STREAM_ID); // terminates
+
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.StreamTerminated.selector, STREAM_ID));
+        stream.settle(STREAM_ID);
+    }
+
+    // =========================================================================
     // Constructor validation
     // =========================================================================
 
