@@ -177,7 +177,7 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
     function claimStart(bytes32 invoiceId) external {
         RemitTypes.Escrow storage escrow = _getEscrow(invoiceId);
 
-        if (escrow.payee != msg.sender) revert RemitErrors.Unauthorized(msg.sender);
+        if (escrow.payee != msg.sender && escrow.payer != msg.sender) revert RemitErrors.Unauthorized(msg.sender);
         if (escrow.status != RemitTypes.EscrowStatus.Funded) revert RemitErrors.EscrowFrozen(invoiceId);
 
         // --- Effects ---
