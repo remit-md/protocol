@@ -27,7 +27,7 @@ import {RemitTypes} from "../../src/libraries/RemitTypes.sol";
 ///      REAL STACK (integration tests):
 ///        `realFeeCalc` (UUPS proxy), `router` (UUPS proxy), `realEscrow`,
 ///        `realTab`, `realStream`, `realBounty`, `realDeposit`
-///        — real marginal fee tiers, all contracts authorized.
+///        — real cliff-based fee tiers, all contracts authorized.
 ///
 ///      RemitEscrow.t.sol inherits this and uses the mock stack (backward-compat).
 ///      Integration.t.sol inherits this and uses the real stack.

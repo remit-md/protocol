@@ -8,19 +8,18 @@ import {RemitTypes} from "./libraries/RemitTypes.sol";
 import {RemitErrors} from "./libraries/RemitErrors.sol";
 
 /// @title RemitFeeCalculator
-/// @notice Calculates protocol fees with marginal tiering based on 30-day rolling volume.
+/// @notice Calculates protocol fees with cliff-based tiering and calendar month volume reset.
 /// @dev UPGRADEABLE via UUPS proxy. This is the ONLY upgradeable contract that handles
 ///      fee logic. Fund-holding contracts (Escrow, Tab, Stream, Bounty) are immutable.
 ///
 ///      Fee tiers (in basis points, 10000 = 100%):
-///        Standard  : 100 bps (1.00%) — rolling volume < $10,000 USDC
-///        Preferred : 50 bps  (0.50%) — rolling volume >= $10,000 USDC
+///        Standard  : 100 bps (1.00%) — monthly spend volume < $10,000 USDC
+///        Preferred : 50 bps  (0.50%) — monthly spend volume >= $10,000 USDC
 ///
-///      Marginal calculation: transactions that cross the threshold are split —
-///      the portion below is charged at standard rate and the rest at preferred rate.
+///      Cliff: once a wallet's cumulative spend crosses $10,000 in a calendar month,
+///      ALL subsequent transactions that month are charged at 50 bps. No marginal split.
 ///
-///      Volume resets on a 30-day rolling window (block.timestamp / 30 days).
-///      This is a simplified approximation of calendar months; good enough for billing.
+///      Volume resets on the 1st of every calendar month (UTC).
 ///
 ///      Ownership is managed via an initialize() + onlyOwner pattern (no OZ Upgradeable
 ///      dependency) so we only need openzeppelin/contracts (non-upgradeable package).
@@ -39,8 +38,8 @@ contract RemitFeeCalculator is IRemitFeeCalculator, UUPSUpgradeable {
     /// @dev Monthly volume per wallet (raw, may be from a stale month — use _getCurrentVolume).
     mapping(address => uint256) public monthlyVolume;
 
-    /// @dev The 30-day window key at which this wallet's volume was last set.
-    ///      monthKey = block.timestamp / 30 days.
+    /// @dev Calendar month key at which this wallet's volume was last set.
+    ///      monthKey = year * 12 + month (e.g. 24315 for March 2026).
     mapping(address => uint256) public lastResetMonth;
 
     /// @dev Contracts authorized to call recordTransaction (Escrow, Tab, Stream, Bounty, Router).
@@ -89,25 +88,14 @@ contract RemitFeeCalculator is IRemitFeeCalculator, UUPSUpgradeable {
     // =========================================================================
 
     /// @inheritdoc IRemitFeeCalculator
+    /// @dev Cliff-based: once monthly volume >= $10k, preferred rate applies to the ENTIRE
+    ///      transaction. No marginal split — the transaction that pushes you past $10k is
+    ///      still charged at standard rate; the NEXT transaction gets preferred.
     function calculateFee(address wallet, uint96 amount) external view override returns (uint96 fee) {
-        uint256 volume = _getCurrentVolume(wallet);
-
-        // Already past threshold — entire transaction at preferred rate.
-        if (volume >= RemitTypes.FEE_THRESHOLD) {
+        if (_getCurrentVolume(wallet) >= RemitTypes.FEE_THRESHOLD) {
             return uint96((uint256(amount) * RemitTypes.FEE_RATE_PREFERRED_BPS) / 10_000);
         }
-
-        uint256 remaining = RemitTypes.FEE_THRESHOLD - volume;
-
-        // Entire transaction fits within standard-rate region.
-        if (uint256(amount) <= remaining) {
-            return uint96((uint256(amount) * RemitTypes.FEE_RATE_BPS) / 10_000);
-        }
-
-        // Marginal split: portion at standard + portion at preferred.
-        uint256 standardFee = (remaining * RemitTypes.FEE_RATE_BPS) / 10_000;
-        uint256 preferredFee = ((uint256(amount) - remaining) * RemitTypes.FEE_RATE_PREFERRED_BPS) / 10_000;
-        return uint96(standardFee + preferredFee);
+        return uint96((uint256(amount) * RemitTypes.FEE_RATE_BPS) / 10_000);
     }
 
     /// @inheritdoc IRemitFeeCalculator
@@ -169,23 +157,38 @@ contract RemitFeeCalculator is IRemitFeeCalculator, UUPSUpgradeable {
     // Internal
     // =========================================================================
 
-    /// @dev Returns the wallet's effective volume for the current 30-day window.
-    ///      Returns 0 if the wallet hasn't transacted in the current window.
+    /// @dev Returns the wallet's effective volume for the current calendar month.
+    ///      Returns 0 if the wallet hasn't transacted in the current month.
     function _getCurrentVolume(address wallet) internal view returns (uint256) {
-        uint256 currentMonth = block.timestamp / 30 days;
-        if (lastResetMonth[wallet] < currentMonth) {
+        if (lastResetMonth[wallet] < _getMonthKey(block.timestamp)) {
             return 0;
         }
         return monthlyVolume[wallet];
     }
 
-    /// @dev Resets volume to zero if we've entered a new 30-day window.
+    /// @dev Resets volume to zero if we've entered a new calendar month.
     function _resetIfNewMonth(address wallet) internal {
-        uint256 currentMonth = block.timestamp / 30 days;
+        uint256 currentMonth = _getMonthKey(block.timestamp);
         if (lastResetMonth[wallet] < currentMonth) {
             monthlyVolume[wallet] = 0;
             lastResetMonth[wallet] = currentMonth;
         }
+    }
+
+    /// @dev Returns a unique key for the calendar month containing `timestamp`.
+    ///      Uses the Hinnant civil date algorithm (same as C++ std::chrono).
+    ///      Result = year * 12 + month (e.g. 24315 for March 2026). Gas: ~200.
+    function _getMonthKey(uint256 timestamp) internal pure returns (uint256) {
+        uint256 z = timestamp / 86400 + 719468;
+        uint256 era = z / 146097;
+        uint256 doe = z - era * 146097;
+        uint256 yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        uint256 doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        uint256 mp = (5 * doy + 2) / 153;
+        uint256 m = mp < 10 ? mp + 3 : mp - 9;
+        uint256 y = yoe + era * 400;
+        if (m <= 2) y += 1;
+        return y * 12 + m;
     }
 
     // =========================================================================

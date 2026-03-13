@@ -198,6 +198,12 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
         feeCalculator = newFeeCalculator;
     }
 
+    /// @inheritdoc IRemitRouter
+    function setFeeRecipient(address newFeeRecipient) external override onlyOwner {
+        if (newFeeRecipient == address(0)) revert RemitErrors.ZeroAddress();
+        feeRecipient = newFeeRecipient;
+    }
+
     /// @notice Set the KeyRegistry contract (V2: session key delegation). address(0) disables key management.
     /// @param newKeyRegistry The RemitKeyRegistry contract address
     function setKeyRegistry(address newKeyRegistry) external onlyOwner {

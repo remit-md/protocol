@@ -63,7 +63,7 @@ contract IntegrationTest is TestBase {
         assertEq(usdc.balanceOf(payee) - payeeBefore, amount - expectedFee);
     }
 
-    function test_payDirect_crossesThreshold_marginalFee() public {
+    function test_payDirect_crossesThreshold_cliffFee() public {
         // First push payer's volume to $9,500.
         vm.prank(admin);
         realFeeCalc.authorizeCaller(address(this)); // temporarily authorize test
@@ -71,12 +71,10 @@ contract IntegrationTest is TestBase {
         vm.prank(admin);
         realFeeCalc.revokeCaller(address(this));
 
-        // Now payDirect $1,000 — straddles $10k threshold.
-        // $500 at 1% = $5. $500 at 0.5% = $2.50. Total fee = $7.50.
+        // Now payDirect $1,000 — would cross $10k threshold.
+        // Cliff: volume ($9,500) < threshold → entire $1,000 at standard rate (1%) = $10.
         uint96 amount = 1_000e6;
-        uint256 standardFee = (500e6 * 100) / 10_000; // $5.00
-        uint256 preferredFee = (500e6 * 50) / 10_000; // $2.50
-        uint96 expectedFee = uint96(standardFee + preferredFee);
+        uint96 expectedFee = uint96((uint256(amount) * 100) / 10_000); // $10.00
 
         vm.prank(payer);
         router.payDirect(payee, amount, bytes32(0));
@@ -151,7 +149,7 @@ contract IntegrationTest is TestBase {
 
         assertEq(realFeeCalc.getFeeRate(payer), RemitTypes.FEE_RATE_BPS); // still standard
 
-        // Second payment: $2,000 straddles $10k mark.
+        // Second payment: $2,000 pushes past $10k (cliff: still standard for this txn).
         vm.prank(payer);
         router.payDirect(payee, 2_000e6, bytes32(0));
 
@@ -159,10 +157,10 @@ contract IntegrationTest is TestBase {
     }
 
     // =========================================================================
-    // Volume resets after 30-day window
+    // Volume resets on calendar month boundary
     // =========================================================================
 
-    function test_volumeReset_afterWindow() public {
+    function test_volumeReset_afterCalendarMonth() public {
         // Mint extra so payer can afford $9k + $2k = $11k total.
         usdc.mint(payer, 2_000e6);
 
@@ -175,8 +173,8 @@ contract IntegrationTest is TestBase {
 
         assertEq(realFeeCalc.getFeeRate(payer), RemitTypes.FEE_RATE_PREFERRED_BPS);
 
-        // Advance 31 days — volume resets.
-        vm.warp(block.timestamp + 31 days);
+        // Advance 35 days — guaranteed to cross a calendar month boundary.
+        vm.warp(block.timestamp + 35 days);
 
         assertEq(realFeeCalc.getFeeRate(payer), RemitTypes.FEE_RATE_BPS);
         assertEq(realFeeCalc.getMonthlyVolume(payer), 0);

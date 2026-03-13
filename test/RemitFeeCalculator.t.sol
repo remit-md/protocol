@@ -33,6 +33,9 @@ contract RemitFeeCalculatorTest is Test {
         // Authorize `caller` as a fund-holding contract.
         vm.prank(owner);
         calc.authorizeCaller(caller);
+
+        // Warp to a known date: 2026-03-15 00:00:00 UTC
+        vm.warp(1773532800);
     }
 
     // =========================================================================
@@ -57,7 +60,7 @@ contract RemitFeeCalculatorTest is Test {
     }
 
     // =========================================================================
-    // calculateFee — standard rate region
+    // calculateFee — standard rate (below cliff)
     // =========================================================================
 
     function test_calculateFee_standardRate_zeroVolume() public view {
@@ -88,7 +91,7 @@ contract RemitFeeCalculatorTest is Test {
     }
 
     // =========================================================================
-    // calculateFee — preferred rate region
+    // calculateFee — preferred rate (above cliff)
     // =========================================================================
 
     function test_calculateFee_preferredRate_aboveThreshold() public {
@@ -102,33 +105,43 @@ contract RemitFeeCalculatorTest is Test {
     }
 
     // =========================================================================
-    // calculateFee — marginal (straddles threshold)
+    // calculateFee — cliff behavior (no marginal split)
     // =========================================================================
 
-    function test_calculateFee_marginal_exactSplit() public {
-        // Volume at $9,500. Transaction of $1,000 straddles the $10k mark.
-        // $500 at standard (1%) = $5. $500 at preferred (0.5%) = $2.50 → $7.50 total.
+    function test_calculateFee_cliff_transactionCrossingThreshold() public {
+        // Volume at $9,500. Transaction of $1,000 would cross $10k.
+        // Cliff: entire $1,000 charged at STANDARD (you haven't crossed yet).
         vm.prank(caller);
         calc.recordTransaction(wallet, 9_500e6);
 
         uint96 amount = 1_000e6;
         uint96 fee = calc.calculateFee(wallet, amount);
 
-        uint256 standardFee = (500e6 * STANDARD) / 10_000; // $5.00
-        uint256 preferredFee = (500e6 * PREFERRED) / 10_000; // $2.50
-        assertEq(fee, uint96(standardFee + preferredFee));
+        // Under old marginal: $500 at 1% + $500 at 0.5% = $7.50
+        // Under cliff: full $1,000 at 1% = $10.00
+        assertEq(fee, (uint256(amount) * STANDARD) / 10_000);
     }
 
-    function test_calculateFee_marginal_oneBelowThreshold() public {
-        // Volume at THRESHOLD - 1 (just below). Any transaction straddles.
+    function test_calculateFee_cliff_firstTransactionAfterCrossing() public {
+        // Volume at $9,500 + record $1,000 → volume = $10,500 (above cliff).
+        vm.startPrank(caller);
+        calc.recordTransaction(wallet, 9_500e6);
+        calc.recordTransaction(wallet, 1_000e6);
+        vm.stopPrank();
+
+        // Next transaction should be at preferred rate.
+        uint96 amount = 500e6;
+        uint96 fee = calc.calculateFee(wallet, amount);
+        assertEq(fee, (uint256(amount) * PREFERRED) / 10_000);
+    }
+
+    function test_calculateFee_cliff_oneBelowThreshold() public {
+        // Volume at THRESHOLD - 1. Still below → standard rate for entire transaction.
         vm.prank(caller);
         calc.recordTransaction(wallet, THRESHOLD - 1);
 
-        // Transaction of 2: 1 at standard, 1 at preferred.
-        uint96 fee = calc.calculateFee(wallet, 2);
-        uint256 standardFee = (1 * STANDARD) / 10_000; // rounds to 0
-        uint256 preferredFee = (1 * PREFERRED) / 10_000; // rounds to 0
-        assertEq(fee, uint96(standardFee + preferredFee));
+        uint96 fee = calc.calculateFee(wallet, 1_000e6);
+        assertEq(fee, (uint256(1_000e6) * STANDARD) / 10_000);
     }
 
     // =========================================================================
@@ -175,48 +188,85 @@ contract RemitFeeCalculatorTest is Test {
     }
 
     // =========================================================================
-    // Monthly volume reset (30-day window)
+    // Calendar month volume reset
     // =========================================================================
 
-    function test_volumeResets_afterNewWindow() public {
+    function test_volumeResets_onCalendarMonthBoundary() public {
+        // Record volume on March 15, 2026
         vm.prank(caller);
         calc.recordTransaction(wallet, 9_000e6);
         assertEq(calc.getMonthlyVolume(wallet), 9_000e6);
 
-        // Advance past 30 days.
-        vm.warp(block.timestamp + 31 days);
+        // Warp to April 1, 2026 00:00:00 UTC (next calendar month)
+        vm.warp(1775001600);
 
-        // Volume is now 0 (new window).
+        // Volume is now 0 (new month).
         assertEq(calc.getMonthlyVolume(wallet), 0);
 
-        // Fee recalculates from zero.
+        // Fee recalculates from zero → standard rate.
         uint96 fee = calc.calculateFee(wallet, 1_000e6);
         assertEq(fee, (1_000e6 * STANDARD) / 10_000);
     }
 
     function test_recordTransaction_resetsThenAccumulates() public {
+        // Record in March 2026
         vm.prank(caller);
         calc.recordTransaction(wallet, 9_000e6);
 
-        vm.warp(block.timestamp + 31 days);
+        // Warp to April 1, 2026
+        vm.warp(1775001600);
 
-        // Record in new window — should start fresh.
+        // Record in new month — should start fresh.
         vm.prank(caller);
         calc.recordTransaction(wallet, 500e6);
 
         assertEq(calc.getMonthlyVolume(wallet), 500e6);
     }
 
-    function test_volumeNotReset_sameWindow() public {
+    function test_volumeNotReset_sameMonth() public {
+        // Record on March 1, 2026
+        vm.warp(1772323200);
         vm.prank(caller);
         calc.recordTransaction(wallet, 5_000e6);
 
-        vm.warp(block.timestamp + 29 days); // still same 30-day window
+        // Warp to March 31, 2026 23:59:59 UTC (same month)
+        vm.warp(1775001599);
 
         vm.prank(caller);
         calc.recordTransaction(wallet, 2_000e6);
 
         assertEq(calc.getMonthlyVolume(wallet), 7_000e6);
+    }
+
+    function test_volumeResets_jan31ToFeb1() public {
+        // Warp to Jan 31, 2026 12:00:00 UTC
+        vm.warp(1769860800);
+
+        vm.prank(caller);
+        calc.recordTransaction(wallet, 8_000e6);
+        assertEq(calc.getMonthlyVolume(wallet), 8_000e6);
+
+        // Warp to Feb 1, 2026 00:00:00 UTC
+        vm.warp(1769904000);
+
+        // Volume resets on calendar month boundary.
+        assertEq(calc.getMonthlyVolume(wallet), 0);
+    }
+
+    function test_volumeNotReset_sameDayDifferentHour() public {
+        // Warp to March 15, 2026 08:00:00 UTC
+        vm.warp(1773561600);
+
+        vm.prank(caller);
+        calc.recordTransaction(wallet, 3_000e6);
+
+        // Warp to March 15, 2026 20:00:00 UTC (same day)
+        vm.warp(1773604800);
+
+        vm.prank(caller);
+        calc.recordTransaction(wallet, 1_000e6);
+
+        assertEq(calc.getMonthlyVolume(wallet), 4_000e6);
     }
 
     // =========================================================================
@@ -305,22 +355,24 @@ contract RemitFeeCalculatorTest is Test {
         assertTrue(rate == STANDARD || rate == PREFERRED);
     }
 
-    /// @dev Marginal fee math: standard + preferred portions sum correctly.
-    function testFuzz_calculateFee_marginalSplit(uint96 txAmount) public {
-        // Set volume to half the threshold so we always cross it.
-        vm.prank(caller);
-        calc.recordTransaction(wallet, THRESHOLD / 2);
+    /// @dev Cliff fee: below threshold → always STANDARD rate, above → always PREFERRED.
+    function testFuzz_calculateFee_cliffBehavior(uint96 txAmount, uint96 volume) public {
+        txAmount = uint96(bound(txAmount, 1, type(uint96).max));
+        volume = uint96(bound(volume, 0, type(uint96).max - txAmount));
 
-        // Bound amount so it definitely straddles the threshold.
-        txAmount = uint96(bound(txAmount, THRESHOLD / 2 + 1, type(uint96).max - THRESHOLD / 2));
+        if (volume > 0) {
+            vm.prank(caller);
+            calc.recordTransaction(wallet, volume);
+        }
 
         uint96 fee = calc.calculateFee(wallet, txAmount);
 
-        // Manual calculation.
-        uint256 remaining = THRESHOLD - (THRESHOLD / 2);
-        uint256 preferredPortion = uint256(txAmount) - remaining;
-        uint256 expectedFee = (remaining * STANDARD) / 10_000 + (preferredPortion * PREFERRED) / 10_000;
-
-        assertEq(fee, uint96(expectedFee));
+        // Cliff: rate is determined by volume BEFORE this transaction.
+        uint256 effectiveVolume = volume; // volume is what was recorded
+        if (effectiveVolume >= THRESHOLD) {
+            assertEq(fee, uint96((uint256(txAmount) * PREFERRED) / 10_000));
+        } else {
+            assertEq(fee, uint96((uint256(txAmount) * STANDARD) / 10_000));
+        }
     }
 }

@@ -51,4 +51,5 @@ interface IRemitRouter {
     function setBounty(address newBounty) external;
     function setDeposit(address newDeposit) external;
     function setFeeCalculator(address newFeeCalculator) external;
+    function setFeeRecipient(address newFeeRecipient) external;
 }

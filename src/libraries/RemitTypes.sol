@@ -163,10 +163,10 @@ library RemitTypes {
         DepositStatus status;
     }
 
-    /// @notice Fee tiers
-    uint96 constant FEE_RATE_BPS = 100; // 1% = 100 basis points
-    uint96 constant FEE_RATE_PREFERRED_BPS = 50; // 0.5% = 50 basis points
-    uint96 constant FEE_THRESHOLD = 10_000e6; // $10,000 in USDC (6 decimals)
+    /// @notice Fee tiers — cliff model (not marginal)
+    uint96 constant FEE_RATE_BPS = 100; // 1% total (below $10k/month spend)
+    uint96 constant FEE_RATE_PREFERRED_BPS = 50; // 0.5% total (above $10k/month spend cliff)
+    uint96 constant FEE_THRESHOLD = 10_000e6; // $10,000 monthly spend cliff (USDC, 6 decimals)
     uint96 constant MIN_AMOUNT = 10_000; // $0.01 in USDC (6 decimals)
     uint96 constant CANCEL_FEE_BPS = 10; // 0.1% = 10 basis points
 
