@@ -685,6 +685,43 @@ contract RemitKeyRegistryTest is Test {
         assertFalse(registry.isAuthorizedContract(stranger));
     }
 
+    // KR-L-01: deauthorizeContract
+    function test_deauthorizeContract_revokesAccess() public {
+        // Confirm authorized before
+        assertTrue(registry.isAuthorizedContract(authorizedContract));
+
+        vm.prank(admin);
+        registry.deauthorizeContract(authorizedContract);
+
+        assertFalse(registry.isAuthorizedContract(authorizedContract));
+    }
+
+    function test_deauthorizeContract_revert_notOwner() public {
+        vm.prank(stranger);
+        vm.expectRevert();
+        registry.deauthorizeContract(authorizedContract);
+    }
+
+    function test_deauthorizeContract_revert_zeroAddress() public {
+        vm.prank(admin);
+        vm.expectRevert(RemitErrors.ZeroAddress.selector);
+        registry.deauthorizeContract(address(0));
+    }
+
+    // KR-I-02: allowedModelsBitmap = 0 validation in delegateKey
+    function test_delegateKey_revert_zeroBitmap() public {
+        address sessionKey = makeAddr("sessionKeyZeroBitmap");
+        uint256 signerKey = uint256(keccak256("masterZeroBitmap"));
+        address masterKey = vm.addr(signerKey);
+
+        uint256 nonce = registry.getNonce(masterKey);
+        bytes memory sig = _signDelegation(signerKey, masterKey, sessionKey, 1_000e6, 0, 0, 0, nonce);
+
+        vm.prank(masterKey);
+        vm.expectRevert(RemitErrors.ZeroAmount.selector);
+        registry.delegateKey(sessionKey, 1_000e6, 0, 0, 0, sig);
+    }
+
     // =========================================================================
     // Integration: full delegation → spend → daily reset flow
     // =========================================================================

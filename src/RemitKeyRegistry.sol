@@ -77,6 +77,8 @@ contract RemitKeyRegistry is IRemitKeyRegistry, ReentrancyGuard, EIP712, Ownable
         // --- Checks ---
         if (sessionKey == address(0)) revert RemitErrors.ZeroAddress();
         if (sessionKey == masterKey) revert RemitErrors.SelfPayment(masterKey);
+        // KR-I-02: bitmap = 0 means no payment types allowed → unusable key, reject at creation
+        if (allowedModelsBitmap == 0) revert RemitErrors.ZeroAmount();
 
         // Session key must not already have an active (non-revoked, non-expired) delegation
         Delegation storage existing = _delegations[sessionKey];
@@ -259,6 +261,13 @@ contract RemitKeyRegistry is IRemitKeyRegistry, ReentrancyGuard, EIP712, Ownable
     function authorizeContract(address contractAddress) external override onlyOwner {
         if (contractAddress == address(0)) revert RemitErrors.ZeroAddress();
         _authorizedContracts[contractAddress] = true;
+    }
+
+    /// @inheritdoc IRemitKeyRegistry
+    /// @dev Used when decommissioning old contract versions (e.g. after an upgrade).
+    function deauthorizeContract(address contractAddress) external override onlyOwner {
+        if (contractAddress == address(0)) revert RemitErrors.ZeroAddress();
+        _authorizedContracts[contractAddress] = false;
     }
 
     // =========================================================================

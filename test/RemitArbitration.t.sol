@@ -195,6 +195,28 @@ contract RemitArbitrationTest is Test {
         assertFalse(arb.isAuthorizedEscrow(stranger));
     }
 
+    // AR-L-02: deauthorizeEscrow
+    function test_deauthorizeEscrow_revokesAccess() public {
+        assertTrue(arb.isAuthorizedEscrow(address(escrow)));
+
+        vm.prank(admin);
+        arb.deauthorizeEscrow(address(escrow));
+
+        assertFalse(arb.isAuthorizedEscrow(address(escrow)));
+    }
+
+    function test_deauthorizeEscrow_revert_notOwner() public {
+        vm.prank(stranger);
+        vm.expectRevert();
+        arb.deauthorizeEscrow(address(escrow));
+    }
+
+    function test_deauthorizeEscrow_revert_zeroAddress() public {
+        vm.prank(admin);
+        vm.expectRevert(RemitErrors.ZeroAddress.selector);
+        arb.deauthorizeEscrow(address(0));
+    }
+
     // =========================================================================
     // Unit 3-B: Tiered Routing — Admin Tier (<$100)
     // =========================================================================

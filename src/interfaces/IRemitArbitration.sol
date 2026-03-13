@@ -114,6 +114,11 @@ interface IRemitArbitration {
     /// @dev Only callable by owner (protocol admin). Emits EscrowAuthorized.
     function authorizeEscrow(address escrowContract) external;
 
+    /// @notice Revoke an escrow contract's authorization to call routeDispute().
+    /// @param escrowContract Address of the escrow contract to deauthorize
+    /// @dev Only callable by owner (protocol admin). Used when decommissioning old escrow versions.
+    function deauthorizeEscrow(address escrowContract) external;
+
     // =========================================================================
     // View Functions
     // =========================================================================

@@ -296,6 +296,13 @@ contract RemitArbitration is IRemitArbitration, ReentrancyGuard, Ownable {
         _authorizedEscrows[escrowContract] = true;
     }
 
+    /// @inheritdoc IRemitArbitration
+    /// @dev Used when decommissioning old escrow contract versions.
+    function deauthorizeEscrow(address escrowContract) external override onlyOwner {
+        if (escrowContract == address(0)) revert RemitErrors.ZeroAddress();
+        _authorizedEscrows[escrowContract] = false;
+    }
+
     // =========================================================================
     // View Functions
     // =========================================================================
@@ -478,10 +485,12 @@ contract RemitArbitration is IRemitArbitration, ReentrancyGuard, Ownable {
         arb.decisionCount++;
 
         // Speed score: 5000 max, decays linearly from 24h to 48h, 0 at/beyond 48h
+        bool decidedOnTime = turnaround <= IDEAL_TURNAROUND;
+        bool decidedWithinDeadline = turnaround < ARBITRATION_DEADLINE;
         uint256 speedScore;
-        if (turnaround <= IDEAL_TURNAROUND) {
+        if (decidedOnTime) {
             speedScore = 5_000;
-        } else if (turnaround < ARBITRATION_DEADLINE) {
+        } else if (decidedWithinDeadline) {
             // Linear decay from 5000 to 0 between 24h and 48h
             uint256 excess = turnaround - IDEAL_TURNAROUND;
             uint256 window = ARBITRATION_DEADLINE - IDEAL_TURNAROUND;
