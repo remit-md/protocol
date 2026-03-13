@@ -80,8 +80,9 @@ contract OnrampVaultFactory {
 
         bytes32 salt = keccak256(abi.encodePacked(_operator));
         vault = implementation.cloneDeterministic(salt);
-        RemitOnrampVault(vault).initialize(_operator, usdc, feeRecipient);
+        // CEI: record vault in state before calling initialize on it
         vaults[_operator] = vault;
+        RemitOnrampVault(vault).initialize(_operator, usdc, feeRecipient);
 
         emit VaultCreated(_operator, vault);
     }

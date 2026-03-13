@@ -1,0 +1,31 @@
+name: Slither
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+
+jobs:
+  slither:
+    runs-on: ubuntu-latest
+    # Informational only — does not block merges
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Build (required for Slither)
+        run: forge build --build-info
+
+      - name: Run Slither
+        uses: crytic/slither-action@v0.4.0
+        with:
+          target: src/
+          slither-args: --filter-paths "test|lib|script" --no-fail-pedantic
+          fail-on: none
