@@ -1,0 +1,7 @@
+# Enforce LF line endings for Solidity source files.
+# forge fmt requires LF; CRLF causes forge fmt --check to fail on Windows.
+*.sol text eol=lf
+
+# Markdown and shell scripts: LF only
+*.md  text eol=lf
+*.sh  text eol=lf
