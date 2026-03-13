@@ -87,6 +87,11 @@ interface IRemitKeyRegistry {
     /// @dev Only callable by owner (protocol admin).
     function authorizeContract(address contractAddress) external;
 
+    /// @notice Revoke a contract's authorization to call recordSpend
+    /// @param contractAddress Contract to deauthorize
+    /// @dev Only callable by owner (protocol admin). Used when decommissioning contracts.
+    function deauthorizeContract(address contractAddress) external;
+
     // =========================================================================
     // View Functions
     // =========================================================================
