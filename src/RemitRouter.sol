@@ -217,7 +217,9 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     /// @notice Transfer ownership to a new address.
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert RemitErrors.ZeroAddress();
+        address previous = _owner;
         _owner = newOwner;
+        emit RemitEvents.OwnershipTransferred(previous, newOwner);
     }
 
     /// @notice Get the current owner.

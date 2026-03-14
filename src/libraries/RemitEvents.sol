@@ -181,4 +181,9 @@ library RemitEvents {
 
     /// @notice Emitted when a disputed escrow is escalated to the arbitration contract
     event DisputeEscalatedToArbitration(bytes32 indexed invoiceId, address indexed arbitrationContract, uint8 tier);
+
+    // === Admin Events ===
+
+    /// @notice Emitted when contract ownership is transferred
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 }
