@@ -6,6 +6,7 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeab
 import {IRemitFeeCalculator} from "./interfaces/IRemitFeeCalculator.sol";
 import {RemitTypes} from "./libraries/RemitTypes.sol";
 import {RemitErrors} from "./libraries/RemitErrors.sol";
+import {RemitEvents} from "./libraries/RemitEvents.sol";
 
 /// @title RemitFeeCalculator
 /// @notice Calculates protocol fees with cliff-based tiering and calendar month volume reset.
@@ -138,7 +139,9 @@ contract RemitFeeCalculator is IRemitFeeCalculator, UUPSUpgradeable {
     /// @param newOwner The new owner address.
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert RemitErrors.ZeroAddress();
+        address previous = _owner;
         _owner = newOwner;
+        emit RemitEvents.OwnershipTransferred(previous, newOwner);
     }
 
     /// @notice Get the current owner.
