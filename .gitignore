@@ -2,3 +2,8 @@ cache/
 out/
 .env
 broadcast/
+
+# Medusa stateful fuzzer
+corpus/
+crytic-export/
+slither_results.json
