@@ -7,14 +7,12 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
+    # Foundry (forge, anvil, cast) is pre-installed on the self-hosted runner.
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Build
         run: forge build
