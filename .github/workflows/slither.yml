@@ -9,14 +9,16 @@ on:
 
 jobs:
   slither:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     # Informational only — does not block merges
-    # Foundry is pre-installed on the self-hosted runner.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Build (required for Slither)
         run: forge build --build-info
