@@ -79,6 +79,9 @@ contract RemitArbitration is IRemitArbitration, ReentrancyGuard, Ownable {
     /// @dev Authorized escrow contracts that can call routeDispute()
     mapping(address => bool) private _authorizedEscrows;
 
+    /// @dev Round-robin counter for arbitrator selection. Eliminates block.prevrandao dependency.
+    uint256 private _nextArbitratorIndex;
+
     // =========================================================================
     // Constructor
     // =========================================================================
@@ -343,7 +346,8 @@ contract RemitArbitration is IRemitArbitration, ReentrancyGuard, Ownable {
         return DisputeTier.Required;
     }
 
-    /// @dev Propose 3 arbitrators from the active pool using pseudo-random selection.
+    /// @dev Propose 3 arbitrators from the active pool using round-robin selection.
+    ///      Picks 3 consecutive pool indices starting at _nextArbitratorIndex (wrapping).
     ///      Falls back to admin if pool has < 3 members and tier allows.
     function _proposeArbitrators(bytes32 invoiceId) internal {
         ArbitrationCase storage c = _cases[invoiceId];
@@ -368,26 +372,14 @@ contract RemitArbitration is IRemitArbitration, ReentrancyGuard, Ownable {
             return;
         }
 
-        // Fisher-Yates shuffle to pick 3 unique indices
-        uint256[] memory indices = new uint256[](poolLen);
-        for (uint256 i; i < poolLen; ++i) {
-            indices[i] = i;
-        }
+        // Round-robin selection: pick 3 consecutive indices starting at _nextArbitratorIndex.
+        // Wraps via modulo. Ensures fair distribution without block-variable manipulation risk.
+        uint256 start = _nextArbitratorIndex % poolLen;
+        _nextArbitratorIndex += 3;
 
-        uint256 seed = uint256(keccak256(abi.encodePacked(block.prevrandao, invoiceId, block.timestamp)));
-
-        for (uint256 i; i < 3; ++i) {
-            uint256 j = i + (seed % (poolLen - i));
-            seed = uint256(keccak256(abi.encodePacked(seed, i)));
-            // Swap
-            uint256 tmp = indices[i];
-            indices[i] = indices[j];
-            indices[j] = tmp;
-        }
-
-        c.proposedArbitrators[0] = _pool[indices[0]];
-        c.proposedArbitrators[1] = _pool[indices[1]];
-        c.proposedArbitrators[2] = _pool[indices[2]];
+        c.proposedArbitrators[0] = _pool[start % poolLen];
+        c.proposedArbitrators[1] = _pool[(start + 1) % poolLen];
+        c.proposedArbitrators[2] = _pool[(start + 2) % poolLen];
 
         emit RemitEvents.ArbitratorsProposed(
             invoiceId, c.proposedArbitrators[0], c.proposedArbitrators[1], c.proposedArbitrators[2]
@@ -395,7 +387,7 @@ contract RemitArbitration is IRemitArbitration, ReentrancyGuard, Ownable {
     }
 
     /// @dev Assign the final arbitrator after both strikes are cast.
-    ///      If both parties struck the same index: randomly pick from remaining 2.
+    ///      If both parties struck the same index: round-robin pick from remaining 2.
     function _assignArbitrator(bytes32 invoiceId) internal {
         ArbitrationCase storage c = _cases[invoiceId];
 
@@ -405,7 +397,7 @@ contract RemitArbitration is IRemitArbitration, ReentrancyGuard, Ownable {
         address assigned;
 
         if (ps == qs) {
-            // Both struck the same arbitrator — pick randomly from the other 2
+            // Both struck the same arbitrator — round-robin pick from the other 2
             // Find the two remaining indices
             uint8[2] memory remaining;
             uint8 idx;
@@ -414,8 +406,9 @@ contract RemitArbitration is IRemitArbitration, ReentrancyGuard, Ownable {
                     remaining[idx++] = i;
                 }
             }
-            uint256 seed = uint256(keccak256(abi.encodePacked(block.prevrandao, invoiceId, block.timestamp)));
-            uint8 chosen = remaining[seed % 2];
+            // Round-robin tiebreak: alternate between the two remaining candidates.
+            uint8 chosen = remaining[_nextArbitratorIndex % 2];
+            _nextArbitratorIndex += 1;
             assigned = c.proposedArbitrators[chosen];
         } else {
             // Find the one not struck by either
