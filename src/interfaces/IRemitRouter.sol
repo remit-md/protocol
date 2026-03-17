@@ -44,6 +44,31 @@ interface IRemitRouter {
     /// @param endpoint Service endpoint URI being called (e.g. "https://api.example.com/v1/inference")
     function payPerRequest(address to, uint96 amount, string calldata endpoint) external;
 
+    /// @notice Settle an x402 payment through the Router.
+    ///         The agent must have signed an EIP-3009 authorization with `to = address(Router)`.
+    ///         The Router pulls the full `amount` from `from`, deducts the protocol fee,
+    ///         forwards the net amount to `recipient`, and sends the fee to `feeRecipient`.
+    /// @param from         Payer address (must have signed the EIP-3009 authorization)
+    /// @param recipient    Final payment recipient (API provider)
+    /// @param amount       Total USDC amount (6 decimals)
+    /// @param validAfter   EIP-3009 validity start timestamp
+    /// @param validBefore  EIP-3009 expiry timestamp
+    /// @param nonce        EIP-3009 nonce (replay protection)
+    /// @param v            ECDSA v component of the authorization signature
+    /// @param r            ECDSA r component of the authorization signature
+    /// @param s            ECDSA s component of the authorization signature
+    function settleX402(
+        address from,
+        address recipient,
+        uint96 amount,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+
     /// @notice Update contract addresses (admin only, timelocked)
     function setEscrow(address newEscrow) external;
     function setTab(address newTab) external;

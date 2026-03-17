@@ -137,6 +137,16 @@ library RemitEvents {
     /// @notice V2: Emitted when a pay-per-request payment is made (endpoint metadata attached)
     event PayPerRequest(address indexed payer, address indexed payee, uint96 amount, uint96 fee, string endpoint);
 
+    /// @notice V3: Emitted when an x402 payment is settled through the Router.
+    ///         The agent signed an EIP-3009 authorization targeting the Router as recipient;
+    ///         the Router pulled the full amount, deducted the protocol fee, and forwarded net to `to`.
+    /// @param from   Payer (signed the EIP-3009 authorization)
+    /// @param to     Final recipient (net amount after fee)
+    /// @param amount Total amount transferred (gross, before fee deduction)
+    /// @param fee    Protocol fee collected and forwarded to feeRecipient
+    /// @param nonce  EIP-3009 nonce consumed by this settlement (replay protection)
+    event X402Payment(address indexed from, address indexed to, uint96 amount, uint96 fee, bytes32 indexed nonce);
+
     /// @notice V2: Emitted when a dispute bond is posted by the filing party (payer or payee)
     event DisputeBondPosted(bytes32 indexed invoiceId, address indexed filer, uint96 bondAmount);
 

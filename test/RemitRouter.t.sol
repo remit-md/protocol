@@ -255,4 +255,250 @@ contract RemitRouterTest is Test {
         // No dust lost
         assertEq(recipientGot + feeGot, amount);
     }
+
+    // =========================================================================
+    // settleX402 — EIP-3009 helpers
+    // =========================================================================
+
+    bytes32 private constant _TRANSFER_WITH_AUTHORIZATION_TYPEHASH = keccak256(
+        "TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
+    );
+
+    function _domainSeparator() internal view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256("USD Coin"),
+                keccak256("2"),
+                block.chainid,
+                address(usdc)
+            )
+        );
+    }
+
+    /// @dev Sign an EIP-3009 transferWithAuthorization for the given params.
+    function _signAuth(
+        uint256 signerKey,
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce
+    ) internal view returns (uint8 v, bytes32 r, bytes32 s) {
+        bytes32 structHash = keccak256(
+            abi.encode(_TRANSFER_WITH_AUTHORIZATION_TYPEHASH, from, to, value, validAfter, validBefore, nonce)
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _domainSeparator(), structHash));
+        (v, r, s) = vm.sign(signerKey, digest);
+    }
+
+    // Use a deterministic private key for the payer so we can sign EIP-3009 auths.
+    uint256 internal constant PAYER_KEY = 0xA11CE;
+
+    function _payerAddr() internal pure returns (address) {
+        return vm.addr(PAYER_KEY);
+    }
+
+    /// @dev Fund the keyed payer and return a valid settleX402 call's params.
+    function _setupX402(uint96 amount, bytes32 nonce)
+        internal
+        returns (address from, uint256 validAfter, uint256 validBefore, uint8 v, bytes32 r, bytes32 s)
+    {
+        from = _payerAddr();
+        usdc.mint(from, amount);
+        validAfter = 0;
+        validBefore = block.timestamp + 1 hours;
+        (v, r, s) = _signAuth(PAYER_KEY, from, address(router), amount, validAfter, validBefore, nonce);
+    }
+
+    // =========================================================================
+    // settleX402 — happy path
+    // =========================================================================
+
+    function test_settleX402_happyPath() public {
+        bytes32 nonce = bytes32(uint256(1));
+        (address from, uint256 validAfter, uint256 validBefore, uint8 v, bytes32 r, bytes32 s) =
+            _setupX402(AMOUNT, nonce);
+
+        uint96 fee = uint96((uint256(AMOUNT) * 100) / 10_000); // 1%
+        uint96 net = AMOUNT - fee;
+
+        vm.expectEmit(true, true, true, true);
+        emit RemitEvents.X402Payment(from, recipient, AMOUNT, fee, nonce);
+
+        router.settleX402(from, recipient, AMOUNT, validAfter, validBefore, nonce, v, r, s);
+
+        // Conservation: recipient gets net, feeRecipient gets fee, payer debited full amount.
+        assertEq(usdc.balanceOf(recipient), net, "recipient balance");
+        assertEq(usdc.balanceOf(feeRecipient), fee, "fee balance");
+        assertEq(usdc.balanceOf(from), 0, "payer should be drained");
+        // Router holds nothing.
+        assertEq(usdc.balanceOf(address(router)), 0, "router should hold zero");
+    }
+
+    function test_settleX402_volumeRecorded() public {
+        bytes32 nonce = bytes32(uint256(2));
+        (address from, uint256 validAfter, uint256 validBefore, uint8 v, bytes32 r, bytes32 s) =
+            _setupX402(AMOUNT, nonce);
+
+        router.settleX402(from, recipient, AMOUNT, validAfter, validBefore, nonce, v, r, s);
+
+        assertEq(feeCalc.monthlyVolume(from), AMOUNT, "volume should be recorded");
+    }
+
+    function test_settleX402_minimumAmount() public {
+        bytes32 nonce = bytes32(uint256(3));
+        (address from, uint256 validAfter, uint256 validBefore, uint8 v, bytes32 r, bytes32 s) = _setupX402(MIN, nonce);
+
+        router.settleX402(from, recipient, MIN, validAfter, validBefore, nonce, v, r, s);
+
+        assertGt(usdc.balanceOf(recipient), 0, "recipient should receive funds");
+    }
+
+    function test_settleX402_anyoneCanSubmit() public {
+        // A stranger (not the payer, not the server) can submit the settlement.
+        // This is by design — the EIP-3009 auth protects funds, not the submitter identity.
+        bytes32 nonce = bytes32(uint256(4));
+        (address from, uint256 validAfter, uint256 validBefore, uint8 v, bytes32 r, bytes32 s) =
+            _setupX402(AMOUNT, nonce);
+
+        vm.prank(stranger);
+        router.settleX402(from, recipient, AMOUNT, validAfter, validBefore, nonce, v, r, s);
+
+        assertEq(usdc.balanceOf(recipient), AMOUNT - uint96((uint256(AMOUNT) * 100) / 10_000));
+    }
+
+    // =========================================================================
+    // settleX402 — reverts
+    // =========================================================================
+
+    function test_settleX402_revertsOnZeroAmount() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.ZeroAmount.selector));
+        router.settleX402(_payerAddr(), recipient, 0, 0, block.timestamp + 1, bytes32(0), 27, bytes32(0), bytes32(0));
+    }
+
+    function test_settleX402_revertsOnBelowMinimum() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.BelowMinimum.selector, MIN - 1, MIN));
+        router.settleX402(
+            _payerAddr(), recipient, MIN - 1, 0, block.timestamp + 1, bytes32(0), 27, bytes32(0), bytes32(0)
+        );
+    }
+
+    function test_settleX402_revertsOnZeroFrom() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.ZeroAddress.selector));
+        router.settleX402(address(0), recipient, AMOUNT, 0, block.timestamp + 1, bytes32(0), 27, bytes32(0), bytes32(0));
+    }
+
+    function test_settleX402_revertsOnZeroRecipient() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.ZeroAddress.selector));
+        router.settleX402(
+            _payerAddr(), address(0), AMOUNT, 0, block.timestamp + 1, bytes32(0), 27, bytes32(0), bytes32(0)
+        );
+    }
+
+    function test_settleX402_revertsOnExpiredAuth() public {
+        bytes32 nonce = bytes32(uint256(5));
+        address from = _payerAddr();
+        usdc.mint(from, AMOUNT);
+
+        uint256 validBefore = block.timestamp - 1; // already expired
+        (uint8 v, bytes32 r, bytes32 s) = _signAuth(PAYER_KEY, from, address(router), AMOUNT, 0, validBefore, nonce);
+
+        vm.expectRevert("MockUSDC: authorization expired");
+        router.settleX402(from, recipient, AMOUNT, 0, validBefore, nonce, v, r, s);
+    }
+
+    function test_settleX402_revertsOnNotYetValid() public {
+        bytes32 nonce = bytes32(uint256(6));
+        address from = _payerAddr();
+        usdc.mint(from, AMOUNT);
+
+        uint256 validAfter = block.timestamp + 1 hours; // not yet valid
+        uint256 validBefore = block.timestamp + 2 hours;
+        (uint8 v, bytes32 r, bytes32 s) =
+            _signAuth(PAYER_KEY, from, address(router), AMOUNT, validAfter, validBefore, nonce);
+
+        vm.expectRevert("MockUSDC: not yet valid");
+        router.settleX402(from, recipient, AMOUNT, validAfter, validBefore, nonce, v, r, s);
+    }
+
+    function test_settleX402_revertsOnInvalidSignature() public {
+        bytes32 nonce = bytes32(uint256(7));
+        address from = _payerAddr();
+        usdc.mint(from, AMOUNT);
+
+        // Sign with a different key (stranger's key), but pass `from` = payer
+        uint256 wrongKey = 0xBEEF;
+        uint256 validBefore = block.timestamp + 1 hours;
+        (uint8 v, bytes32 r, bytes32 s) = _signAuth(wrongKey, from, address(router), AMOUNT, 0, validBefore, nonce);
+
+        vm.expectRevert("MockUSDC: invalid signature");
+        router.settleX402(from, recipient, AMOUNT, 0, validBefore, nonce, v, r, s);
+    }
+
+    function test_settleX402_revertsOnReplay() public {
+        bytes32 nonce = bytes32(uint256(8));
+        (address from, uint256 validAfter, uint256 validBefore, uint8 v, bytes32 r, bytes32 s) =
+            _setupX402(AMOUNT, nonce);
+
+        // First settlement succeeds.
+        router.settleX402(from, recipient, AMOUNT, validAfter, validBefore, nonce, v, r, s);
+
+        // Mint more so balance isn't the issue.
+        usdc.mint(from, AMOUNT);
+
+        // Replay with same nonce — must revert.
+        vm.expectRevert("MockUSDC: nonce already used");
+        router.settleX402(from, recipient, AMOUNT, validAfter, validBefore, nonce, v, r, s);
+    }
+
+    // =========================================================================
+    // settleX402 — conservation fuzz
+    // =========================================================================
+
+    function testFuzz_settleX402_feeInvariant(uint96 amount) public {
+        amount = uint96(bound(amount, MIN, 50_000e6));
+
+        bytes32 nonce = bytes32(uint256(uint160(address(this))) ^ uint256(amount));
+        (address from, uint256 validAfter, uint256 validBefore, uint8 v, bytes32 r, bytes32 s) =
+            _setupX402(amount, nonce);
+
+        uint256 payerBefore = usdc.balanceOf(from);
+
+        router.settleX402(from, recipient, amount, validAfter, validBefore, nonce, v, r, s);
+
+        uint256 recipientGot = usdc.balanceOf(recipient);
+        uint256 feeGot = usdc.balanceOf(feeRecipient);
+
+        // Conservation: payer's debit == recipient + fee
+        assertEq(payerBefore - usdc.balanceOf(from), recipientGot + feeGot, "conservation");
+        assertEq(recipientGot + feeGot, amount, "no dust lost");
+        // Router holds nothing
+        assertEq(usdc.balanceOf(address(router)), 0, "router zero balance");
+    }
+
+    // =========================================================================
+    // settleX402 — frame condition (settleX402 doesn't affect payDirect state)
+    // =========================================================================
+
+    function test_settleX402_frameCondition() public {
+        // Do a payDirect first, then settleX402 — ensure payDirect balances are unaffected.
+        vm.prank(payer);
+        router.payDirect(recipient, AMOUNT, bytes32(0));
+        uint256 recipientAfterDirect = usdc.balanceOf(recipient);
+        // feeRecipient accrues fees from both paths — only check direct recipient is unaffected.
+
+        // Now do an x402 settlement with a different payer.
+        bytes32 nonce = bytes32(uint256(99));
+        (address x402Payer, uint256 validAfter, uint256 validBefore, uint8 v, bytes32 r, bytes32 s) =
+            _setupX402(AMOUNT, nonce);
+
+        address x402Recipient = makeAddr("x402Recipient");
+        router.settleX402(x402Payer, x402Recipient, AMOUNT, validAfter, validBefore, nonce, v, r, s);
+
+        // payDirect payer's balance is unchanged by x402.
+        // Fee recipient gets fees from both — but the direct recipient's balance should be unchanged.
+        assertEq(usdc.balanceOf(recipient), recipientAfterDirect, "direct recipient unaffected");
+    }
 }

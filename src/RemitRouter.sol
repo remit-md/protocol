@@ -9,6 +9,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IRemitRouter} from "./interfaces/IRemitRouter.sol";
 import {IRemitFeeCalculator} from "./interfaces/IRemitFeeCalculator.sol";
 import {IRemitKeyRegistry} from "./interfaces/IRemitKeyRegistry.sol";
+import {IUSDC} from "./interfaces/IUSDC.sol";
 import {RemitTypes} from "./libraries/RemitTypes.sol";
 import {RemitErrors} from "./libraries/RemitErrors.sol";
 import {RemitEvents} from "./libraries/RemitEvents.sol";
@@ -156,6 +157,60 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
         IRemitFeeCalculator(feeCalculator).recordTransaction(msg.sender, amount);
 
         emit RemitEvents.PayPerRequest(msg.sender, to, amount, fee, endpoint);
+    }
+
+    // =========================================================================
+    // IRemitRouter — settleX402 (EIP-3009 routed x402 payment)
+    // =========================================================================
+
+    /// @inheritdoc IRemitRouter
+    /// @dev Security invariants:
+    ///      - Conservation: from.balance decreases by `amount`; recipient gets `amount - fee`;
+    ///        feeRecipient gets `fee`. Total = `amount`. No funds leak.
+    ///      - Replay protection: USDC.transferWithAuthorization consumes the nonce; any re-use reverts.
+    ///      - Atomic: either the full amount moves (fee split included) or the whole call reverts.
+    ///      - Router holds no residual balance: transferWithAuthorization pulls to address(this),
+    ///        both outbound transfers execute in the same transaction, no way to exit partially.
+    ///      CEI: fee is calculated (view), then transferWithAuthorization (pull), then two transfers (push),
+    ///           then volume is recorded. nonReentrant guards against re-entry from USDC callbacks
+    ///           (real USDC has none; defense-in-depth for forks/mocks).
+    function settleX402(
+        address from,
+        address recipient,
+        uint96 amount,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external override nonReentrant {
+        if (from == address(0)) revert RemitErrors.ZeroAddress();
+        if (recipient == address(0)) revert RemitErrors.ZeroAddress();
+        if (amount == 0) revert RemitErrors.ZeroAmount();
+        if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
+
+        // Calculate fee before any transfers (Checks-Effects-Interactions: checks first).
+        uint96 fee = IRemitFeeCalculator(feeCalculator).calculateFee(from, amount);
+        uint96 netAmount = amount - fee;
+
+        // Pull full amount from payer to Router via EIP-3009 authorization.
+        // The agent must have signed: to = address(this) (Router), value = amount.
+        // This also consumes the nonce, providing replay protection.
+        IUSDC(usdc).transferWithAuthorization(from, address(this), amount, validAfter, validBefore, nonce, v, r, s);
+
+        // Forward net amount to the final recipient.
+        IERC20(usdc).safeTransfer(recipient, netAmount);
+
+        // Forward fee to protocol fee wallet (skip zero-fee for gas efficiency).
+        if (fee > 0) {
+            IERC20(usdc).safeTransfer(feeRecipient, fee);
+        }
+
+        // Record volume for cliff calculation (done after transfers — no re-entrancy risk here).
+        IRemitFeeCalculator(feeCalculator).recordTransaction(from, amount);
+
+        emit RemitEvents.X402Payment(from, recipient, amount, fee, nonce);
     }
 
     // =========================================================================
