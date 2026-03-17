@@ -1,0 +1,48 @@
+name: Deploy Testnet
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "Forge script to run (e.g. UpgradeRouter.s.sol)"
+        required: true
+        type: choice
+        options:
+          - UpgradeRouter.s.sol
+          - RedeployContracts.s.sol
+          - RedeployBounty.s.sol
+          - RedeployDeposit.s.sol
+          - RedeployMockUSDC.s.sol
+          - DeployOnrampVault.s.sol
+          - UpgradeFeeCalculator.s.sol
+          - DeployTestnet.s.sol
+      dry_run:
+        description: "Simulate only (no broadcast)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Build
+        run: forge build
+
+      - name: Run deploy script
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          ALCHEMY_BASE_SEPOLIA_URL: ${{ secrets.ALCHEMY_BASE_SEPOLIA_URL }}
+        run: |
+          FLAGS="--rpc-url $ALCHEMY_BASE_SEPOLIA_URL --private-key $DEPLOYER_PRIVATE_KEY -vvvv"
+          if [ "${{ inputs.dry_run }}" = "false" ]; then
+            FLAGS="$FLAGS --broadcast"
+          fi
+          forge script script/${{ inputs.script }} $FLAGS
