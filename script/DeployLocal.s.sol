@@ -53,6 +53,7 @@ contract DeployLocal is Script {
         _authorizeArbitration();
         _deployRouter(deployer, deployer, deployer);
         _wireRouter();
+        _authorizeRelayers(deployer);
         _mintTestTokens(deployer);
         vm.stopBroadcast();
 
@@ -141,6 +142,12 @@ contract DeployLocal is Script {
         router.setBounty(_bounty);
         router.setDeposit(_deposit);
         RemitFeeCalculator(_feeCalcProxy).authorizeCaller(_routerProxy);
+    }
+
+    function _authorizeRelayers(address deployer) internal {
+        // Authorize the deployer (= server relayer in E2E) on Bounty so the
+        // server can call postBountyFor / awardBountyFor / reclaimBountyFor.
+        RemitBounty(_bounty).authorizeRelayer(deployer);
     }
 
     function _mintTestTokens(address deployer) internal {
