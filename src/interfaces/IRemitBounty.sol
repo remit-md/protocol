@@ -80,6 +80,9 @@ interface IRemitBounty {
         uint8 maxAttempts
     ) external;
 
+    /// @notice Submit to a bounty on behalf of `submitter` — only authorized relayer
+    function submitBountyFor(address submitter, bytes32 bountyId, bytes32 evidenceHash) external;
+
     /// @notice Award a bounty on behalf of `poster` — only authorized relayer
     /// @dev poster must match bounty.poster on-chain
     function awardBountyFor(address poster, bytes32 bountyId, address winner) external;

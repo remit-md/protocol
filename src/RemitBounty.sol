@@ -397,6 +397,43 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
         emit RemitEvents.BountyPosted(bountyId, poster, amount, deadline, taskHash);
     }
 
+    /// @notice Submit to a bounty on behalf of `submitter` (server relayer pattern).
+    /// @dev Only callable by an authorized relayer. If the bounty has a non-zero submission bond,
+    ///      the submitter must have approved this contract for the bond amount.
+    ///      CEI: validate → update state → transfer bond (if any).
+    /// @param submitter The actual submitter (not the relayer)
+    /// @param bountyId  The bounty to submit to
+    /// @param evidenceHash  Hash of the evidence/work
+    function submitBountyFor(address submitter, bytes32 bountyId, bytes32 evidenceHash)
+        external
+        nonReentrant
+        onlyAuthorizedRelayer
+    {
+        RemitTypes.Bounty storage bounty = _getBounty(bountyId);
+
+        // --- Checks ---
+        if (bounty.status != RemitTypes.BountyStatus.Open) revert RemitErrors.BountyClaimed(bountyId);
+        if (block.timestamp > bounty.deadline) revert RemitErrors.BountyExpired(bountyId);
+        if (bounty.maxAttempts != 0 && bounty.attemptCount >= bounty.maxAttempts) {
+            revert RemitErrors.BountyMaxAttempts(bountyId);
+        }
+        if (evidenceHash == bytes32(0)) revert RemitErrors.ZeroAmount();
+        if (submitter == bounty.poster) revert RemitErrors.SelfPayment(submitter);
+
+        // --- Effects ---
+        _submissions[bountyId][submitter] = evidenceHash;
+        _pendingSubmitter[bountyId] = submitter;
+        bounty.attemptCount += 1;
+        bounty.status = RemitTypes.BountyStatus.Claimed;
+
+        // --- Interactions ---
+        if (bounty.submissionBond > 0) {
+            usdc.safeTransferFrom(submitter, address(this), bounty.submissionBond);
+        }
+
+        emit RemitEvents.BountyClaimed(bountyId, submitter, evidenceHash);
+    }
+
     /// @notice Award a bounty on behalf of `poster` (server relayer pattern).
     /// @dev Only callable by an authorized relayer. Validates `poster` matches the on-chain
     ///      bounty record. Distributes bounty minus fee to winner; fee to feeRecipient.
