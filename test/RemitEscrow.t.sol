@@ -810,4 +810,168 @@ contract RemitEscrowTest is TestBase {
         RemitTypes.Escrow memory e = escrow.getEscrow(INV);
         assertEq(uint8(e.status), uint8(RemitTypes.EscrowStatus.Funded));
     }
+
+    // =========================================================================
+    // Relayer authorization
+    // =========================================================================
+
+    address internal relayer = makeAddr("relayer");
+
+    function _authorizeRelayer() internal {
+        vm.prank(admin);
+        escrow.authorizeRelayer(relayer);
+    }
+
+    function test_authorizeRelayer_works() public {
+        assertFalse(escrow.isAuthorizedRelayer(relayer));
+        _authorizeRelayer();
+        assertTrue(escrow.isAuthorizedRelayer(relayer));
+    }
+
+    function test_authorizeRelayer_revertsForStranger() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        vm.prank(stranger);
+        escrow.authorizeRelayer(relayer);
+    }
+
+    // =========================================================================
+    // createEscrowFor — happy path + conservation
+    // =========================================================================
+
+    bytes32 constant INV_FOR = keccak256("invoice-for-001");
+
+    function test_createEscrowFor_happyPath() public {
+        _authorizeRelayer();
+
+        uint64 timeout = uint64(block.timestamp + TIMEOUT_DELTA);
+        uint256 payerBefore = usdc.balanceOf(payer);
+
+        vm.expectEmit(true, true, true, true);
+        emit RemitEvents.EscrowFunded(INV_FOR, payer, payee, AMOUNT, timeout);
+
+        vm.prank(relayer);
+        escrow.createEscrowFor(
+            payer, INV_FOR, payee, AMOUNT, timeout, new RemitTypes.Milestone[](0), new RemitTypes.Split[](0)
+        );
+
+        RemitTypes.Escrow memory e = escrow.getEscrow(INV_FOR);
+        assertEq(e.payer, payer, "payer should be agent, not relayer");
+        assertEq(e.payee, payee);
+        assertEq(e.amount, AMOUNT);
+        // Conservation: payer debited
+        assertEq(payerBefore - usdc.balanceOf(payer), AMOUNT, "payer debited");
+    }
+
+    function test_createEscrowFor_revertsForUnauthorized() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        vm.prank(stranger);
+        escrow.createEscrowFor(
+            payer,
+            INV_FOR,
+            payee,
+            AMOUNT,
+            uint64(block.timestamp + TIMEOUT_DELTA),
+            new RemitTypes.Milestone[](0),
+            new RemitTypes.Split[](0)
+        );
+    }
+
+    // =========================================================================
+    // releaseEscrowFor — happy path
+    // =========================================================================
+
+    bytes32 constant INV_REL = keccak256("invoice-release-for");
+
+    function test_releaseEscrowFor_happyPath() public {
+        _authorizeRelayer();
+
+        // Create escrow via For variant
+        uint64 timeout = uint64(block.timestamp + TIMEOUT_DELTA);
+        vm.prank(relayer);
+        escrow.createEscrowFor(
+            payer, INV_REL, payee, AMOUNT, timeout, new RemitTypes.Milestone[](0), new RemitTypes.Split[](0)
+        );
+
+        // claimStart via For variant
+        vm.prank(relayer);
+        escrow.claimStartFor(payee, INV_REL);
+
+        uint256 payeeBefore = usdc.balanceOf(payee);
+
+        // release via For variant
+        vm.prank(relayer);
+        escrow.releaseEscrowFor(payer, INV_REL);
+
+        RemitTypes.Escrow memory e = escrow.getEscrow(INV_REL);
+        assertEq(uint8(e.status), uint8(RemitTypes.EscrowStatus.Completed));
+        assertGt(usdc.balanceOf(payee), payeeBefore, "payee received funds");
+        assertGt(usdc.balanceOf(feeRecipient), 0, "fee collected");
+    }
+
+    // =========================================================================
+    // cancelEscrowFor — happy path
+    // =========================================================================
+
+    bytes32 constant INV_CAN = keccak256("invoice-cancel-for");
+
+    function test_cancelEscrowFor_happyPath() public {
+        _authorizeRelayer();
+
+        uint64 timeout = uint64(block.timestamp + TIMEOUT_DELTA);
+        vm.prank(relayer);
+        escrow.createEscrowFor(
+            payer, INV_CAN, payee, AMOUNT, timeout, new RemitTypes.Milestone[](0), new RemitTypes.Split[](0)
+        );
+
+        uint256 payerBefore = usdc.balanceOf(payer);
+
+        vm.prank(relayer);
+        escrow.cancelEscrowFor(payer, INV_CAN);
+
+        RemitTypes.Escrow memory e = escrow.getEscrow(INV_CAN);
+        assertEq(uint8(e.status), uint8(RemitTypes.EscrowStatus.Cancelled));
+        // Payer gets refund minus cancel fee
+        assertGt(usdc.balanceOf(payer), payerBefore, "payer got refund");
+    }
+
+    // =========================================================================
+    // claimStartFor — happy path
+    // =========================================================================
+
+    bytes32 constant INV_CS = keccak256("invoice-claimstart-for");
+
+    function test_claimStartFor_happyPath() public {
+        _authorizeRelayer();
+
+        uint64 timeout = uint64(block.timestamp + TIMEOUT_DELTA);
+        vm.prank(relayer);
+        escrow.createEscrowFor(
+            payer, INV_CS, payee, AMOUNT, timeout, new RemitTypes.Milestone[](0), new RemitTypes.Split[](0)
+        );
+
+        vm.expectEmit(true, true, false, true);
+        emit RemitEvents.ClaimStartConfirmed(INV_CS, payee, uint64(block.timestamp));
+
+        vm.prank(relayer);
+        escrow.claimStartFor(payee, INV_CS);
+
+        RemitTypes.Escrow memory e = escrow.getEscrow(INV_CS);
+        assertEq(uint8(e.status), uint8(RemitTypes.EscrowStatus.Active));
+        assertTrue(e.claimStarted);
+    }
+
+    function test_claimStartFor_revertsForUnauthorizedCaller() public {
+        _authorizeRelayer();
+
+        uint64 timeout = uint64(block.timestamp + TIMEOUT_DELTA);
+        vm.prank(relayer);
+        escrow.createEscrowFor(
+            payer, INV_CS, payee, AMOUNT, timeout, new RemitTypes.Milestone[](0), new RemitTypes.Split[](0)
+        );
+
+        // stranger is not payer or payee
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        vm.prank(relayer);
+        escrow.claimStartFor(stranger, INV_CS);
+    }
 }

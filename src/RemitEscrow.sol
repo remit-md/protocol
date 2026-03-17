@@ -46,6 +46,17 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
     IRemitArbitration public immutable arbitrationContract;
 
     // =========================================================================
+    // Relayer authorization
+    // =========================================================================
+
+    mapping(address => bool) private _authorizedRelayers;
+
+    modifier onlyAuthorizedRelayer() {
+        if (!_authorizedRelayers[msg.sender]) revert RemitErrors.Unauthorized(msg.sender);
+        _;
+    }
+
+    // =========================================================================
     // Storage
     // =========================================================================
 
@@ -189,6 +200,162 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
 
         emit RemitEvents.ClaimStartConfirmed(invoiceId, msg.sender, uint64(block.timestamp));
     }
+
+    // =========================================================================
+    // For variants (relayer-submitted on behalf of users)
+    // =========================================================================
+
+    /// @notice Create an escrow on behalf of `payer` (relayer-submitted).
+    ///         Payer must have approved USDC to this contract (typically via EIP-2612 permit).
+    function createEscrowFor(
+        address payer,
+        bytes32 invoiceId,
+        address payee,
+        uint96 amount,
+        uint64 timeout,
+        RemitTypes.Milestone[] calldata milestones,
+        RemitTypes.Split[] calldata splits
+    ) external nonReentrant whenNotPaused onlyAuthorizedRelayer {
+        if (payer == address(0)) revert RemitErrors.ZeroAddress();
+        if (_escrows[invoiceId].payer != address(0)) revert RemitErrors.EscrowAlreadyFunded(invoiceId);
+        if (payee == address(0)) revert RemitErrors.ZeroAddress();
+        if (payee == payer) revert RemitErrors.SelfPayment(payer);
+        if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
+        if (timeout <= block.timestamp) revert RemitErrors.InvalidTimeout(timeout);
+        RemitKeyValidator._validateAndRecord(keyRegistry, payer, amount, RemitTypes.PaymentType.ESCROW);
+        _enforceTimeoutFloor(amount, timeout);
+
+        if (milestones.length > 0) {
+            uint96 milestoneSum;
+            for (uint256 i; i < milestones.length; ++i) {
+                milestoneSum += milestones[i].amount;
+                _enforceTimeoutFloor(milestones[i].amount, milestones[i].timeout);
+            }
+            if (milestoneSum != amount) revert RemitErrors.BelowMinimum(milestoneSum, amount);
+        }
+
+        if (splits.length > 0) {
+            uint96 splitSum;
+            for (uint256 i; i < splits.length; ++i) {
+                if (splits[i].payee == address(0)) revert RemitErrors.ZeroAddress();
+                splitSum += splits[i].amount;
+            }
+            if (splitSum != amount) revert RemitErrors.BelowMinimum(splitSum, amount);
+        }
+
+        uint96 fee = feeCalculator.calculateFee(payer, amount);
+
+        _escrows[invoiceId] = RemitTypes.Escrow({
+            payer: payer,
+            amount: amount,
+            payee: payee,
+            feeAmount: fee,
+            timeout: timeout,
+            createdAt: uint64(block.timestamp),
+            status: RemitTypes.EscrowStatus.Funded,
+            claimStarted: false,
+            evidenceSubmitted: false,
+            evidenceHash: bytes32(0),
+            milestoneCount: uint8(milestones.length),
+            splitCount: uint8(splits.length)
+        });
+
+        for (uint256 i; i < milestones.length; ++i) {
+            _milestones[invoiceId].push(milestones[i]);
+        }
+        for (uint256 i; i < splits.length; ++i) {
+            _splits[invoiceId].push(splits[i]);
+        }
+
+        _escrowParticipations[payer]++;
+
+        // Pull from payer (not msg.sender)
+        usdc.safeTransferFrom(payer, address(this), amount);
+
+        emit RemitEvents.EscrowFunded(invoiceId, payer, payee, amount, timeout);
+    }
+
+    /// @notice Release escrow on behalf of `payer` (relayer-submitted).
+    function releaseEscrowFor(address payer, bytes32 invoiceId) external nonReentrant onlyAuthorizedRelayer {
+        RemitTypes.Escrow storage escrow = _getEscrow(invoiceId);
+
+        if (escrow.payer != payer) revert RemitErrors.Unauthorized(payer);
+        if (escrow.status != RemitTypes.EscrowStatus.Active) revert RemitErrors.EscrowFrozen(invoiceId);
+        if (escrow.milestoneCount > 0) revert RemitErrors.MilestoneEscrowBlocked(invoiceId);
+
+        uint96 amount = escrow.amount;
+        uint96 fee = escrow.feeAmount;
+        address payee = escrow.payee;
+        uint8 splitCount = escrow.splitCount;
+
+        escrow.status = RemitTypes.EscrowStatus.Completed;
+        feeCalculator.recordTransaction(payer, amount);
+
+        if (splitCount > 0) {
+            RemitTypes.Split[] storage splits = _splits[invoiceId];
+            uint96 feeAccumulated;
+            for (uint256 i; i < splitCount; ++i) {
+                uint96 splitFee;
+                if (i < splitCount - 1) {
+                    splitFee = uint96((uint256(fee) * splits[i].amount) / amount);
+                    feeAccumulated += splitFee;
+                } else {
+                    splitFee = fee - feeAccumulated;
+                }
+                uint96 splitNet = splits[i].amount - splitFee;
+                usdc.safeTransfer(splits[i].payee, splitNet);
+            }
+            usdc.safeTransfer(feeRecipient, fee);
+        } else {
+            uint96 net = amount - fee;
+            usdc.safeTransfer(payee, net);
+            usdc.safeTransfer(feeRecipient, fee);
+        }
+
+        emit RemitEvents.EscrowReleased(invoiceId, payee, amount - fee, fee);
+        emit RemitEvents.FeeCollected(invoiceId, fee, feeRecipient);
+    }
+
+    /// @notice Cancel escrow on behalf of `payer` (relayer-submitted).
+    function cancelEscrowFor(address payer, bytes32 invoiceId) external nonReentrant onlyAuthorizedRelayer {
+        RemitTypes.Escrow storage escrow = _getEscrow(invoiceId);
+
+        if (escrow.payer != payer) revert RemitErrors.Unauthorized(payer);
+        if (escrow.status != RemitTypes.EscrowStatus.Funded) revert RemitErrors.EscrowFrozen(invoiceId);
+        if (escrow.claimStarted) revert RemitErrors.CancelBlockedClaimStart(invoiceId);
+        if (escrow.evidenceSubmitted) revert RemitErrors.CancelBlockedEvidence(invoiceId);
+
+        uint96 amount = escrow.amount;
+        uint96 cancelFee = uint96((uint256(amount) * RemitTypes.CANCEL_FEE_BPS) / 10_000);
+        uint96 refund = amount - cancelFee;
+
+        escrow.status = RemitTypes.EscrowStatus.Cancelled;
+
+        usdc.safeTransfer(payer, refund);
+        usdc.safeTransfer(feeRecipient, cancelFee);
+
+        emit RemitEvents.EscrowCancelled(invoiceId, payer, false, cancelFee);
+        emit RemitEvents.FeeCollected(invoiceId, cancelFee, feeRecipient);
+    }
+
+    /// @notice Claim start on behalf of `caller` (relayer-submitted).
+    ///         Caller must be either payer or payee of the escrow.
+    function claimStartFor(address caller, bytes32 invoiceId) external onlyAuthorizedRelayer {
+        RemitTypes.Escrow storage escrow = _getEscrow(invoiceId);
+
+        if (escrow.payee != caller && escrow.payer != caller) revert RemitErrors.Unauthorized(caller);
+        if (escrow.status != RemitTypes.EscrowStatus.Funded) revert RemitErrors.EscrowFrozen(invoiceId);
+
+        escrow.claimStarted = true;
+        escrow.status = RemitTypes.EscrowStatus.Active;
+        _escrowParticipations[caller]++;
+
+        emit RemitEvents.ClaimStartConfirmed(invoiceId, caller, uint64(block.timestamp));
+    }
+
+    // =========================================================================
+    // Evidence & Release
+    // =========================================================================
 
     /// @inheritdoc IRemitEscrow
     function submitEvidence(bytes32 invoiceId, uint8 milestoneIndex, bytes32 evidenceHash) external {
@@ -710,6 +877,26 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
     // =========================================================================
     // Admin Functions
     // =========================================================================
+
+    /// @notice Authorize a relayer to call *For variants on behalf of users.
+    function authorizeRelayer(address relayer) external {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        if (relayer == address(0)) revert RemitErrors.ZeroAddress();
+        _authorizedRelayers[relayer] = true;
+        emit RemitEvents.RelayerAuthorized(relayer);
+    }
+
+    /// @notice Revoke a relayer's authorization.
+    function revokeRelayer(address relayer) external {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        _authorizedRelayers[relayer] = false;
+        emit RemitEvents.RelayerRevoked(relayer);
+    }
+
+    /// @notice Check if an address is an authorized relayer.
+    function isAuthorizedRelayer(address relayer) external view returns (bool) {
+        return _authorizedRelayers[relayer];
+    }
 
     /// @notice Pause all escrow operations (admin only)
     function pause() external {

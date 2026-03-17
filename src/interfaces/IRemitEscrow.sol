@@ -24,10 +24,24 @@ interface IRemitEscrow {
         RemitTypes.Split[] calldata splits
     ) external;
 
+    /// @notice Create escrow on behalf of `payer` (relayer-submitted).
+    function createEscrowFor(
+        address payer,
+        bytes32 invoiceId,
+        address payee,
+        uint96 amount,
+        uint64 timeout,
+        RemitTypes.Milestone[] calldata milestones,
+        RemitTypes.Split[] calldata splits
+    ) external;
+
     /// @notice Payee signals they have begun work. Blocks payer unilateral cancel.
     /// @param invoiceId The escrow's invoice ID
     /// @dev Only callable by payee. Irreversible. Emits ClaimStartConfirmed.
     function claimStart(bytes32 invoiceId) external;
+
+    /// @notice Claim start on behalf of `caller` (relayer-submitted).
+    function claimStartFor(address caller, bytes32 invoiceId) external;
 
     /// @notice Payee submits evidence of work completion
     /// @param invoiceId The escrow's invoice ID
@@ -41,6 +55,9 @@ interface IRemitEscrow {
     /// @dev Only callable by payer. Fee deducted. Emits EscrowReleased.
     function releaseEscrow(bytes32 invoiceId) external;
 
+    /// @notice Release escrow on behalf of `payer` (relayer-submitted).
+    function releaseEscrowFor(address payer, bytes32 invoiceId) external;
+
     /// @notice Payer releases a single milestone
     /// @param invoiceId The escrow's invoice ID
     /// @param milestoneIndex Index of the milestone to release
@@ -51,6 +68,9 @@ interface IRemitEscrow {
     /// @param invoiceId The escrow's invoice ID
     /// @dev 0.1% cancellation fee. Emits EscrowCancelled.
     function cancelEscrow(bytes32 invoiceId) external;
+
+    /// @notice Cancel escrow on behalf of `payer` (relayer-submitted).
+    function cancelEscrowFor(address payer, bytes32 invoiceId) external;
 
     /// @notice Both parties agree to cancel
     /// @param invoiceId The escrow's invoice ID
