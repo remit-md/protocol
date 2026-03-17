@@ -196,4 +196,10 @@ library RemitEvents {
 
     /// @notice Emitted when contract ownership is transferred
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    /// @notice Emitted when a relayer is authorized to act on behalf of users (e.g. postBountyFor)
+    event RelayerAuthorized(address indexed relayer);
+
+    /// @notice Emitted when a relayer authorization is revoked
+    event RelayerRevoked(address indexed relayer);
 }

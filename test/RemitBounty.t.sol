@@ -23,6 +23,7 @@ contract RemitBountyTest is Test {
     address internal feeRecipient = makeAddr("feeRecipient");
     address internal stranger = makeAddr("stranger");
     address internal admin = makeAddr("admin");
+    address internal relayer = makeAddr("relayer");
 
     bytes32 constant BOUNTY_ID = keccak256("bounty-1");
     bytes32 constant TASK_HASH = keccak256("do the thing");
@@ -425,11 +426,275 @@ contract RemitBountyTest is Test {
     }
 
     // =========================================================================
+    // authorizeRelayer / revokeRelayer
+    // =========================================================================
+
+    function test_authorizeRelayer_onlyAdmin() public {
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        bounty.authorizeRelayer(relayer);
+    }
+
+    function test_authorizeRelayer_revert_zeroAddress() public {
+        vm.prank(admin);
+        vm.expectRevert(RemitErrors.ZeroAddress.selector);
+        bounty.authorizeRelayer(address(0));
+    }
+
+    function test_revokeRelayer_onlyAdmin() public {
+        vm.prank(admin);
+        bounty.authorizeRelayer(relayer);
+
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        bounty.revokeRelayer(relayer);
+    }
+
+    function test_authorizeAndRevokeRelayer() public {
+        assertFalse(bounty.isAuthorizedRelayer(relayer));
+
+        vm.expectEmit(true, false, false, false);
+        emit RemitEvents.RelayerAuthorized(relayer);
+        vm.prank(admin);
+        bounty.authorizeRelayer(relayer);
+        assertTrue(bounty.isAuthorizedRelayer(relayer));
+
+        vm.expectEmit(true, false, false, false);
+        emit RemitEvents.RelayerRevoked(relayer);
+        vm.prank(admin);
+        bounty.revokeRelayer(relayer);
+        assertFalse(bounty.isAuthorizedRelayer(relayer));
+    }
+
+    // =========================================================================
+    // postBountyFor
+    // =========================================================================
+
+    function test_postBountyFor_pullsFromPoster_notRelayer() public {
+        _authorizeRelayer();
+        // poster pre-approved in setUp; relayer has no USDC approval
+
+        uint256 posterBefore = usdc.balanceOf(poster);
+        uint256 relayerBefore = usdc.balanceOf(relayer);
+
+        vm.prank(relayer);
+        bounty.postBountyFor(poster, BOUNTY_ID, AMOUNT, uint64(block.timestamp + DEADLINE_DELTA), TASK_HASH, BOND, 3);
+
+        // USDC came from poster, not relayer
+        assertEq(usdc.balanceOf(poster), posterBefore - AMOUNT);
+        assertEq(usdc.balanceOf(relayer), relayerBefore); // relayer balance unchanged
+        assertEq(usdc.balanceOf(address(bounty)), AMOUNT);
+
+        RemitTypes.Bounty memory b = bounty.getBounty(BOUNTY_ID);
+        assertEq(b.poster, poster); // poster is the on-chain owner, not relayer
+        assertEq(b.amount, AMOUNT);
+        assertEq(uint8(b.status), uint8(RemitTypes.BountyStatus.Open));
+    }
+
+    function test_postBountyFor_emitsEvent() public {
+        _authorizeRelayer();
+
+        vm.expectEmit(true, true, false, true);
+        emit RemitEvents.BountyPosted(BOUNTY_ID, poster, AMOUNT, uint64(block.timestamp + DEADLINE_DELTA), TASK_HASH);
+
+        vm.prank(relayer);
+        bounty.postBountyFor(poster, BOUNTY_ID, AMOUNT, uint64(block.timestamp + DEADLINE_DELTA), TASK_HASH, 0, 0);
+    }
+
+    function test_postBountyFor_revert_unauthorizedRelayer() public {
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        bounty.postBountyFor(poster, BOUNTY_ID, AMOUNT, uint64(block.timestamp + DEADLINE_DELTA), TASK_HASH, 0, 0);
+    }
+
+    function test_postBountyFor_revert_zeroPoster() public {
+        _authorizeRelayer();
+        vm.prank(relayer);
+        vm.expectRevert(RemitErrors.ZeroAddress.selector);
+        bounty.postBountyFor(address(0), BOUNTY_ID, AMOUNT, uint64(block.timestamp + DEADLINE_DELTA), TASK_HASH, 0, 0);
+    }
+
+    function test_postBountyFor_revert_duplicate() public {
+        _authorizeRelayer();
+        _postBountyFor(BOND, 3);
+
+        vm.prank(relayer);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.EscrowAlreadyFunded.selector, BOUNTY_ID));
+        bounty.postBountyFor(poster, BOUNTY_ID, AMOUNT, uint64(block.timestamp + DEADLINE_DELTA), TASK_HASH, 0, 0);
+    }
+
+    // =========================================================================
+    // awardBountyFor
+    // =========================================================================
+
+    function test_awardBountyFor_paysWinnerMinusFee() public {
+        _authorizeRelayer();
+        _postBountyFor(BOND, 0);
+
+        vm.prank(submitter);
+        bounty.submitBounty(BOUNTY_ID, EVIDENCE);
+
+        uint256 submitterBefore = usdc.balanceOf(submitter);
+        uint256 feeBefore = usdc.balanceOf(feeRecipient);
+
+        uint96 fee = AMOUNT / 100;
+        uint96 winnerGets = AMOUNT - fee;
+
+        vm.expectEmit(true, true, false, true);
+        emit RemitEvents.BountyAwarded(BOUNTY_ID, submitter, winnerGets, fee);
+
+        vm.prank(relayer);
+        bounty.awardBountyFor(poster, BOUNTY_ID, submitter);
+
+        assertEq(usdc.balanceOf(submitter), submitterBefore + winnerGets + BOND);
+        assertEq(usdc.balanceOf(feeRecipient), feeBefore + fee);
+        assertEq(usdc.balanceOf(address(bounty)), 0);
+
+        RemitTypes.Bounty memory b = bounty.getBounty(BOUNTY_ID);
+        assertEq(uint8(b.status), uint8(RemitTypes.BountyStatus.Awarded));
+        assertEq(b.winner, submitter);
+    }
+
+    function test_awardBountyFor_feeGoesToFeeWallet() public {
+        _authorizeRelayer();
+        _postBountyFor(0, 0);
+
+        vm.prank(submitter);
+        bounty.submitBounty(BOUNTY_ID, EVIDENCE);
+
+        uint256 feeBefore = usdc.balanceOf(feeRecipient);
+
+        vm.prank(relayer);
+        bounty.awardBountyFor(poster, BOUNTY_ID, submitter);
+
+        uint96 expectedFee = AMOUNT / 100;
+        assertEq(usdc.balanceOf(feeRecipient), feeBefore + expectedFee);
+    }
+
+    function test_awardBountyFor_revert_posterMismatch() public {
+        _authorizeRelayer();
+        _postBountyFor(0, 0);
+
+        vm.prank(submitter);
+        bounty.submitBounty(BOUNTY_ID, EVIDENCE);
+
+        vm.prank(relayer);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        bounty.awardBountyFor(stranger, BOUNTY_ID, submitter); // wrong poster
+    }
+
+    function test_awardBountyFor_revert_unauthorizedRelayer() public {
+        _authorizeRelayer();
+        _postBountyFor(0, 0);
+
+        vm.prank(submitter);
+        bounty.submitBounty(BOUNTY_ID, EVIDENCE);
+
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        bounty.awardBountyFor(poster, BOUNTY_ID, submitter);
+    }
+
+    function test_awardBountyFor_revert_notClaimed() public {
+        _authorizeRelayer();
+        _postBountyFor(0, 0);
+
+        vm.prank(relayer);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.AlreadyClosed.selector, BOUNTY_ID));
+        bounty.awardBountyFor(poster, BOUNTY_ID, submitter);
+    }
+
+    // =========================================================================
+    // reclaimBountyFor
+    // =========================================================================
+
+    function test_reclaimBountyFor_returnsToRealPoster() public {
+        _authorizeRelayer();
+        _postBountyFor(0, 0);
+
+        vm.warp(block.timestamp + DEADLINE_DELTA + 1);
+
+        uint256 posterBefore = usdc.balanceOf(poster);
+
+        vm.expectEmit(true, false, false, true);
+        emit RemitEvents.BountyExpired(BOUNTY_ID, AMOUNT);
+
+        vm.prank(relayer);
+        bounty.reclaimBountyFor(poster, BOUNTY_ID);
+
+        assertEq(usdc.balanceOf(poster), posterBefore + AMOUNT);
+        assertEq(usdc.balanceOf(relayer), 0); // nothing went to relayer
+        assertEq(uint8(bounty.getBounty(BOUNTY_ID).status), uint8(RemitTypes.BountyStatus.Expired));
+    }
+
+    function test_reclaimBountyFor_claimedAtDeadline_returnsBondToSubmitter() public {
+        _authorizeRelayer();
+        _postBountyFor(BOND, 0);
+
+        vm.prank(submitter);
+        bounty.submitBounty(BOUNTY_ID, EVIDENCE);
+
+        vm.warp(block.timestamp + DEADLINE_DELTA + 1);
+
+        uint256 submitterBefore = usdc.balanceOf(submitter);
+        uint256 posterBefore = usdc.balanceOf(poster);
+
+        vm.prank(relayer);
+        bounty.reclaimBountyFor(poster, BOUNTY_ID);
+
+        assertEq(usdc.balanceOf(poster), posterBefore + AMOUNT);
+        assertEq(usdc.balanceOf(submitter), submitterBefore + BOND); // bond returned
+    }
+
+    function test_reclaimBountyFor_revert_posterMismatch() public {
+        _authorizeRelayer();
+        _postBountyFor(0, 0);
+        vm.warp(block.timestamp + DEADLINE_DELTA + 1);
+
+        vm.prank(relayer);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        bounty.reclaimBountyFor(stranger, BOUNTY_ID);
+    }
+
+    function test_reclaimBountyFor_revert_beforeDeadline() public {
+        _authorizeRelayer();
+        _postBountyFor(0, 0);
+
+        vm.prank(relayer);
+        vm.expectRevert(
+            abi.encodeWithSelector(RemitErrors.InvalidTimeout.selector, uint64(block.timestamp + DEADLINE_DELTA))
+        );
+        bounty.reclaimBountyFor(poster, BOUNTY_ID);
+    }
+
+    function test_reclaimBountyFor_revert_unauthorizedRelayer() public {
+        _authorizeRelayer();
+        _postBountyFor(0, 0);
+        vm.warp(block.timestamp + DEADLINE_DELTA + 1);
+
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        bounty.reclaimBountyFor(poster, BOUNTY_ID);
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 
     function _postBounty(uint96 bond, uint8 maxAttempts) internal {
         vm.prank(poster);
         bounty.postBounty(BOUNTY_ID, AMOUNT, uint64(block.timestamp + DEADLINE_DELTA), TASK_HASH, bond, maxAttempts);
+    }
+
+    function _postBountyFor(uint96 bond, uint8 maxAttempts) internal {
+        vm.prank(relayer);
+        bounty.postBountyFor(
+            poster, BOUNTY_ID, AMOUNT, uint64(block.timestamp + DEADLINE_DELTA), TASK_HASH, bond, maxAttempts
+        );
+    }
+
+    function _authorizeRelayer() internal {
+        vm.prank(admin);
+        bounty.authorizeRelayer(relayer);
     }
 }

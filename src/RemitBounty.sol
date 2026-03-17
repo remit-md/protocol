@@ -42,6 +42,8 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
     mapping(bytes32 => mapping(address => bytes32)) private _submissions;
     /// @dev bountyId → currently pending submitter (set when status = Claimed, cleared otherwise)
     mapping(bytes32 => address) private _pendingSubmitter;
+    /// @dev Addresses authorized to call For-variant functions on behalf of real users (server relayer)
+    mapping(address => bool) private _authorizedRelayers;
 
     // =========================================================================
     // Constructor
@@ -69,6 +71,41 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
         feeRecipient = _feeRecipient;
         protocolAdmin = _protocolAdmin;
         keyRegistry = IRemitKeyRegistry(_keyRegistry);
+    }
+
+    // =========================================================================
+    // Modifiers
+    // =========================================================================
+
+    modifier onlyAuthorizedRelayer() {
+        if (!_authorizedRelayers[msg.sender]) revert RemitErrors.Unauthorized(msg.sender);
+        _;
+    }
+
+    // =========================================================================
+    // Relayer Authorization (only protocolAdmin)
+    // =========================================================================
+
+    /// @notice Authorize an address to call For-variant functions on behalf of real users
+    /// @param relayer The relayer address to authorize (e.g. server signing key)
+    function authorizeRelayer(address relayer) external {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        if (relayer == address(0)) revert RemitErrors.ZeroAddress();
+        _authorizedRelayers[relayer] = true;
+        emit RemitEvents.RelayerAuthorized(relayer);
+    }
+
+    /// @notice Revoke a previously authorized relayer
+    /// @param relayer The relayer address to revoke
+    function revokeRelayer(address relayer) external {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        _authorizedRelayers[relayer] = false;
+        emit RemitEvents.RelayerRevoked(relayer);
+    }
+
+    /// @notice Check whether an address is an authorized relayer
+    function isAuthorizedRelayer(address relayer) external view returns (bool) {
+        return _authorizedRelayers[relayer];
     }
 
     // =========================================================================
@@ -304,6 +341,130 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
         if (bond > 0) usdc.safeTransfer(pendingSubmitter, bond);
 
         emit RemitEvents.BountyExpired(bountyId, bounty.amount);
+    }
+
+    // =========================================================================
+    // Relayer For-Variants (server acts on behalf of the real poster/provider)
+    // =========================================================================
+
+    /// @notice Post a bounty on behalf of `poster` (server relayer pattern).
+    /// @dev Only callable by an authorized relayer. Pulls USDC from `poster`, who must have
+    ///      pre-approved this contract. Records `poster` as the on-chain bounty owner —
+    ///      not the relayer. All subsequent award/reclaim checks compare against `poster`.
+    ///      CEI: validate → update state → pull USDC from poster.
+    /// @param poster   The real bounty poster whose USDC is at stake
+    /// @param bountyId Unique bounty identifier
+    /// @param amount   Bounty reward (6 decimals, ≥ MIN_AMOUNT)
+    /// @param deadline Unix timestamp deadline
+    /// @param taskHash keccak256 of task description
+    /// @param submissionBond Bond per submission (anti-spam)
+    /// @param maxAttempts Max submissions allowed (0 = unlimited)
+    function postBountyFor(
+        address poster,
+        bytes32 bountyId,
+        uint96 amount,
+        uint64 deadline,
+        bytes32 taskHash,
+        uint96 submissionBond,
+        uint8 maxAttempts
+    ) external nonReentrant onlyAuthorizedRelayer {
+        // --- Checks ---
+        if (poster == address(0)) revert RemitErrors.ZeroAddress();
+        if (_bounties[bountyId].poster != address(0)) revert RemitErrors.EscrowAlreadyFunded(bountyId);
+        if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
+        if (deadline <= block.timestamp) revert RemitErrors.InvalidTimeout(deadline);
+        if (taskHash == bytes32(0)) revert RemitErrors.ZeroAmount();
+
+        // --- Effects ---
+        _bounties[bountyId] = RemitTypes.Bounty({
+            poster: poster,
+            amount: amount,
+            deadline: deadline,
+            createdAt: uint64(block.timestamp),
+            maxAttempts: maxAttempts,
+            attemptCount: 0,
+            winner: address(0),
+            status: RemitTypes.BountyStatus.Open,
+            taskHash: taskHash,
+            submissionBond: submissionBond,
+            rejectedAt: 0
+        });
+
+        // --- Interactions ---
+        // Pull from poster (not relayer) — poster must have approved this contract
+        usdc.safeTransferFrom(poster, address(this), amount);
+
+        emit RemitEvents.BountyPosted(bountyId, poster, amount, deadline, taskHash);
+    }
+
+    /// @notice Award a bounty on behalf of `poster` (server relayer pattern).
+    /// @dev Only callable by an authorized relayer. Validates `poster` matches the on-chain
+    ///      bounty record. Distributes bounty minus fee to winner; fee to feeRecipient.
+    ///      CEI: validate → snapshot amounts → update state → distribute funds.
+    /// @param poster   Must match bounty.poster on-chain (relayer cannot spoof)
+    /// @param bountyId The bounty to award
+    /// @param winner   Must be the current pending submitter
+    function awardBountyFor(address poster, bytes32 bountyId, address winner)
+        external
+        nonReentrant
+        onlyAuthorizedRelayer
+    {
+        RemitTypes.Bounty storage b = _getBounty(bountyId);
+
+        // --- Checks ---
+        if (poster != b.poster) revert RemitErrors.Unauthorized(poster);
+        if (b.status != RemitTypes.BountyStatus.Claimed) revert RemitErrors.AlreadyClosed(bountyId);
+        if (winner != _pendingSubmitter[bountyId]) revert RemitErrors.Unauthorized(winner);
+        if (_submissions[bountyId][winner] == bytes32(0)) revert RemitErrors.Unauthorized(winner);
+
+        uint96 fee = feeCalculator.calculateFee(b.poster, b.amount);
+        if (fee > b.amount) fee = b.amount; // safety cap
+        uint96 winnerGets = b.amount - fee;
+        uint96 bond = b.submissionBond;
+
+        // --- Effects ---
+        b.status = RemitTypes.BountyStatus.Awarded;
+        b.winner = winner;
+        delete _pendingSubmitter[bountyId];
+
+        // --- Interactions ---
+        usdc.safeTransfer(winner, winnerGets);
+        if (bond > 0) usdc.safeTransfer(winner, bond); // return submission bond
+        if (fee > 0) usdc.safeTransfer(feeRecipient, fee);
+
+        emit RemitEvents.BountyAwarded(bountyId, winner, winnerGets, fee);
+    }
+
+    /// @notice Reclaim a bounty on behalf of `poster` after deadline (server relayer pattern).
+    /// @dev Only callable by an authorized relayer. Validates `poster` matches the on-chain
+    ///      bounty record. If the bounty is in Claimed state at deadline, the pending
+    ///      submitter's bond is returned (they submitted in good faith before deadline).
+    ///      CEI: validate → snapshot → update state → distribute funds.
+    /// @param poster   Must match bounty.poster on-chain
+    /// @param bountyId The bounty to reclaim
+    function reclaimBountyFor(address poster, bytes32 bountyId) external nonReentrant onlyAuthorizedRelayer {
+        RemitTypes.Bounty storage b = _getBounty(bountyId);
+
+        // --- Checks ---
+        if (poster != b.poster) revert RemitErrors.Unauthorized(poster);
+        if (block.timestamp <= b.deadline) revert RemitErrors.InvalidTimeout(b.deadline);
+        if (b.status == RemitTypes.BountyStatus.Awarded) revert RemitErrors.AlreadyClosed(bountyId);
+        if (b.status == RemitTypes.BountyStatus.Expired) revert RemitErrors.AlreadyClosed(bountyId);
+
+        // Snapshot before state changes
+        bool wasClaimed = b.status == RemitTypes.BountyStatus.Claimed;
+        address pendingSubmitter = _pendingSubmitter[bountyId];
+        uint96 bond = (wasClaimed && b.submissionBond > 0) ? b.submissionBond : 0;
+
+        // --- Effects ---
+        b.status = RemitTypes.BountyStatus.Expired;
+        if (wasClaimed) delete _pendingSubmitter[bountyId];
+
+        // --- Interactions ---
+        usdc.safeTransfer(b.poster, b.amount);
+        if (bond > 0) usdc.safeTransfer(pendingSubmitter, bond);
+
+        emit RemitEvents.BountyExpired(bountyId, b.amount);
     }
 
     // =========================================================================

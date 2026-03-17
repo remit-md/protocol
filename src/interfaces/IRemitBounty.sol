@@ -66,6 +66,39 @@ interface IRemitBounty {
     /// @dev Only poster, only after deadline. Emits BountyExpired.
     function reclaimBounty(bytes32 bountyId) external;
 
+    // === Relayer For-Variants ===
+
+    /// @notice Post a bounty on behalf of `poster` — only authorized relayer
+    /// @dev poster must have pre-approved this contract to spend `amount` USDC
+    function postBountyFor(
+        address poster,
+        bytes32 bountyId,
+        uint96 amount,
+        uint64 deadline,
+        bytes32 taskHash,
+        uint96 submissionBond,
+        uint8 maxAttempts
+    ) external;
+
+    /// @notice Award a bounty on behalf of `poster` — only authorized relayer
+    /// @dev poster must match bounty.poster on-chain
+    function awardBountyFor(address poster, bytes32 bountyId, address winner) external;
+
+    /// @notice Reclaim a bounty on behalf of `poster` after deadline — only authorized relayer
+    /// @dev poster must match bounty.poster on-chain
+    function reclaimBountyFor(address poster, bytes32 bountyId) external;
+
+    // === Relayer Administration ===
+
+    /// @notice Authorize a relayer address (only protocolAdmin)
+    function authorizeRelayer(address relayer) external;
+
+    /// @notice Revoke a relayer address (only protocolAdmin)
+    function revokeRelayer(address relayer) external;
+
+    /// @notice Check whether an address is an authorized relayer
+    function isAuthorizedRelayer(address relayer) external view returns (bool);
+
     // === View Functions ===
 
     function getBounty(bytes32 bountyId) external view returns (RemitTypes.Bounty memory);
