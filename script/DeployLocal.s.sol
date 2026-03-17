@@ -88,7 +88,7 @@ contract DeployLocal is Script {
         _tab = address(new RemitTab(_usdc, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         _stream = address(new RemitStream(_usdc, _feeCalcProxy, feeRecipient, _keyRegistry));
         _bounty = address(new RemitBounty(_usdc, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
-        _deposit = address(new RemitDeposit(_usdc, _keyRegistry));
+        _deposit = address(new RemitDeposit(_usdc, _keyRegistry, protocolAdmin));
         console2.log("Escrow:  ", _escrow);
         console2.log("Tab:     ", _tab);
         console2.log("Stream:  ", _stream);
@@ -145,9 +145,10 @@ contract DeployLocal is Script {
     }
 
     function _authorizeRelayers(address deployer) internal {
-        // Authorize the deployer (= server relayer in E2E) on Bounty so the
-        // server can call postBountyFor / awardBountyFor / reclaimBountyFor.
+        // Authorize the deployer (= server relayer in E2E) on Bounty and Deposit
+        // so the server can call For-variant functions.
         RemitBounty(_bounty).authorizeRelayer(deployer);
+        RemitDeposit(_deposit).authorizeRelayer(deployer);
     }
 
     function _mintTestTokens(address deployer) internal {

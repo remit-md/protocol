@@ -97,7 +97,7 @@ contract Deploy is Script {
         _bounty = address(new RemitBounty(usdcAddr, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         console2.log("RemitBounty:   ", _bounty);
 
-        _deposit = address(new RemitDeposit(usdcAddr, _keyRegistry));
+        _deposit = address(new RemitDeposit(usdcAddr, _keyRegistry, protocolAdmin));
         console2.log("RemitDeposit:  ", _deposit);
     }
 

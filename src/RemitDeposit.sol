@@ -30,12 +30,24 @@ contract RemitDeposit is IRemitDeposit, ReentrancyGuard {
     IERC20 public immutable usdc;
     /// @dev V2: Session key registry. address(0) = key management not enabled.
     IRemitKeyRegistry public immutable keyRegistry;
+    /// @dev Protocol admin — can authorize/revoke relayers.
+    address public immutable protocolAdmin;
 
     // =========================================================================
     // Storage
     // =========================================================================
 
     mapping(bytes32 => RemitTypes.Deposit) private _deposits;
+    mapping(address => bool) private _authorizedRelayers;
+
+    // =========================================================================
+    // Modifiers
+    // =========================================================================
+
+    modifier onlyAuthorizedRelayer() {
+        if (!_authorizedRelayers[msg.sender]) revert RemitErrors.Unauthorized(msg.sender);
+        _;
+    }
 
     // =========================================================================
     // Constructor
@@ -43,10 +55,13 @@ contract RemitDeposit is IRemitDeposit, ReentrancyGuard {
 
     /// @param _usdc USDC token address
     /// @param _keyRegistry V2: Session key registry (address(0) to disable)
-    constructor(address _usdc, address _keyRegistry) {
+    /// @param _protocolAdmin Address that can authorize/revoke relayers
+    constructor(address _usdc, address _keyRegistry, address _protocolAdmin) {
         if (_usdc == address(0)) revert RemitErrors.ZeroAddress();
+        if (_protocolAdmin == address(0)) revert RemitErrors.ZeroAddress();
         usdc = IERC20(_usdc);
         keyRegistry = IRemitKeyRegistry(_keyRegistry);
+        protocolAdmin = _protocolAdmin;
     }
 
     // =========================================================================
@@ -145,6 +160,130 @@ contract RemitDeposit is IRemitDeposit, ReentrancyGuard {
         usdc.safeTransfer(depositor, amount);
 
         emit RemitEvents.DepositReturned(depositId, depositor, amount);
+    }
+
+    // =========================================================================
+    // Relayer-Delegated Functions (For-variants)
+    // =========================================================================
+
+    /// @notice Lock a deposit on behalf of a depositor (relayer pulls USDC from depositor).
+    /// @param depositor The real depositor whose USDC is pulled and who is recorded on-chain.
+    /// @dev Relayer must be authorized. Depositor must have approved this contract for `amount`.
+    function lockDepositFor(address depositor, bytes32 depositId, address provider, uint96 amount, uint64 expiry)
+        external
+        nonReentrant
+        onlyAuthorizedRelayer
+    {
+        // --- Checks ---
+        if (_deposits[depositId].depositor != address(0)) revert RemitErrors.EscrowAlreadyFunded(depositId);
+        if (provider == address(0)) revert RemitErrors.ZeroAddress();
+        if (provider == depositor) revert RemitErrors.SelfPayment(depositor);
+        if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
+        if (expiry <= block.timestamp) revert RemitErrors.InvalidTimeout(expiry);
+
+        // --- Effects ---
+        _deposits[depositId] = RemitTypes.Deposit({
+            depositor: depositor,
+            amount: amount,
+            provider: provider,
+            expiry: expiry,
+            status: RemitTypes.DepositStatus.Locked
+        });
+
+        // --- Interactions ---
+        usdc.safeTransferFrom(depositor, address(this), amount);
+
+        emit RemitEvents.DepositLocked(depositId, depositor, provider, amount, expiry);
+    }
+
+    /// @notice Return a deposit on behalf of the provider (relayer acts for provider).
+    /// @param depositId The deposit ID.
+    /// @param provider The provider address (must match the deposit's provider).
+    function returnDepositFor(bytes32 depositId, address provider) external nonReentrant onlyAuthorizedRelayer {
+        RemitTypes.Deposit storage dep = _getDeposit(depositId);
+
+        // --- Checks ---
+        if (provider != dep.provider) revert RemitErrors.Unauthorized(provider);
+        if (dep.status != RemitTypes.DepositStatus.Locked) revert RemitErrors.AlreadyClosed(depositId);
+
+        address depositor = dep.depositor;
+        uint96 amount = dep.amount;
+
+        // --- Effects ---
+        dep.status = RemitTypes.DepositStatus.Returned;
+
+        // --- Interactions ---
+        usdc.safeTransfer(depositor, amount);
+
+        emit RemitEvents.DepositReturned(depositId, depositor, amount);
+    }
+
+    /// @notice Forfeit a deposit on behalf of the provider (relayer acts for provider).
+    /// @param depositId The deposit ID.
+    /// @param provider The provider address (must match the deposit's provider).
+    function forfeitDepositFor(bytes32 depositId, address provider) external nonReentrant onlyAuthorizedRelayer {
+        RemitTypes.Deposit storage dep = _getDeposit(depositId);
+
+        // --- Checks ---
+        if (provider != dep.provider) revert RemitErrors.Unauthorized(provider);
+        if (dep.status != RemitTypes.DepositStatus.Locked) revert RemitErrors.AlreadyClosed(depositId);
+
+        uint96 amount = dep.amount;
+
+        // --- Effects ---
+        dep.status = RemitTypes.DepositStatus.Forfeited;
+
+        // --- Interactions ---
+        usdc.safeTransfer(provider, amount);
+
+        emit RemitEvents.DepositForfeited(depositId, provider, amount);
+    }
+
+    /// @notice Claim an expired deposit on behalf of the depositor.
+    /// @param depositId The deposit ID.
+    /// @param depositor The depositor address (must match the deposit's depositor).
+    function claimExpiredDepositFor(bytes32 depositId, address depositor) external nonReentrant onlyAuthorizedRelayer {
+        RemitTypes.Deposit storage dep = _getDeposit(depositId);
+
+        // --- Checks ---
+        if (depositor != dep.depositor) revert RemitErrors.Unauthorized(depositor);
+        if (dep.status != RemitTypes.DepositStatus.Locked) revert RemitErrors.AlreadyClosed(depositId);
+        if (block.timestamp <= dep.expiry) revert RemitErrors.InvalidTimeout(dep.expiry);
+
+        uint96 amount = dep.amount;
+
+        // --- Effects ---
+        dep.status = RemitTypes.DepositStatus.Returned;
+
+        // --- Interactions ---
+        usdc.safeTransfer(depositor, amount);
+
+        emit RemitEvents.DepositReturned(depositId, depositor, amount);
+    }
+
+    // =========================================================================
+    // Relayer Admin
+    // =========================================================================
+
+    /// @notice Authorize a relayer to call For-variant functions.
+    /// @param relayer The relayer address to authorize.
+    function authorizeRelayer(address relayer) external {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        _authorizedRelayers[relayer] = true;
+        emit RemitEvents.RelayerAuthorized(relayer);
+    }
+
+    /// @notice Revoke a relayer's authorization.
+    /// @param relayer The relayer address to revoke.
+    function revokeRelayer(address relayer) external {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        _authorizedRelayers[relayer] = false;
+        emit RemitEvents.RelayerRevoked(relayer);
+    }
+
+    /// @notice Check if an address is an authorized relayer.
+    function isAuthorizedRelayer(address relayer) external view returns (bool) {
+        return _authorizedRelayers[relayer];
     }
 
     // =========================================================================

@@ -126,7 +126,7 @@ contract DepositInvariantTest is Test {
 
     function setUp() public {
         usdc = new MockUSDC();
-        dep = new RemitDeposit(address(usdc), address(0));
+        dep = new RemitDeposit(address(usdc), address(0), address(this));
         handler = new DepositHandler(dep, usdc);
         targetContract(address(handler));
     }

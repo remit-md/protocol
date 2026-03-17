@@ -21,7 +21,7 @@ contract RemitDepositFuzzTest is Test {
 
     function setUp() public {
         usdc = new MockUSDC();
-        dep = new RemitDeposit(address(usdc), address(0));
+        dep = new RemitDeposit(address(usdc), address(0), address(this));
 
         usdc.mint(depositor, type(uint96).max);
         vm.prank(depositor);

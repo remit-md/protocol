@@ -68,7 +68,7 @@ contract DeployLocalTest is Test {
         tab = new RemitTab(address(usdc), address(feeCalc), deployer, deployer, address(keyRegistry));
         stream = new RemitStream(address(usdc), address(feeCalc), deployer, address(keyRegistry));
         bounty = new RemitBounty(address(usdc), address(feeCalc), deployer, deployer, address(keyRegistry));
-        deposit = new RemitDeposit(address(usdc), address(keyRegistry));
+        deposit = new RemitDeposit(address(usdc), address(keyRegistry), deployer);
 
         // 6. Authorize fund-holding contracts in FeeCalculator
         feeCalc.authorizeCaller(address(escrow));

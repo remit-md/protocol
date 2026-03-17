@@ -111,7 +111,7 @@ contract DeployMainnet is Script {
         _tab = address(new RemitTab(MAINNET_USDC, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         _stream = address(new RemitStream(MAINNET_USDC, _feeCalcProxy, feeRecipient, _keyRegistry));
         _bounty = address(new RemitBounty(MAINNET_USDC, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
-        _deposit = address(new RemitDeposit(MAINNET_USDC, _keyRegistry));
+        _deposit = address(new RemitDeposit(MAINNET_USDC, _keyRegistry, protocolAdmin));
         console2.log("Escrow:               ", _escrow);
         console2.log("Tab:                  ", _tab);
         console2.log("Stream:               ", _stream);

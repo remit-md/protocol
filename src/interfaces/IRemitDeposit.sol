@@ -30,6 +30,27 @@ interface IRemitDeposit {
     /// @dev Only after expiry. Emits DepositReturned.
     function claimExpiredDeposit(bytes32 depositId) external;
 
+    // === Relayer-Delegated (For-variants) ===
+
+    /// @notice Lock deposit on behalf of a depositor (relayer pulls USDC from depositor)
+    function lockDepositFor(address depositor, bytes32 depositId, address provider, uint96 amount, uint64 expiry)
+        external;
+
+    /// @notice Return deposit on behalf of the provider
+    function returnDepositFor(bytes32 depositId, address provider) external;
+
+    /// @notice Forfeit deposit on behalf of the provider
+    function forfeitDepositFor(bytes32 depositId, address provider) external;
+
+    /// @notice Claim expired deposit on behalf of the depositor
+    function claimExpiredDepositFor(bytes32 depositId, address depositor) external;
+
+    // === Relayer Admin ===
+
+    function authorizeRelayer(address relayer) external;
+    function revokeRelayer(address relayer) external;
+    function isAuthorizedRelayer(address relayer) external view returns (bool);
+
     // === View Functions ===
 
     function getDeposit(bytes32 depositId) external view returns (RemitTypes.Deposit memory);

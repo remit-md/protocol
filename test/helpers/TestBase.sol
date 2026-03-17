@@ -84,7 +84,7 @@ contract TestBase is Test {
         tabContract = new RemitTab(address(usdc), address(feeCalc), feeRecipient, admin, address(0));
         streamContract = new RemitStream(address(usdc), address(feeCalc), feeRecipient, address(0));
         bountyContract = new RemitBounty(address(usdc), address(feeCalc), feeRecipient, admin, address(0));
-        depositContract = new RemitDeposit(address(usdc), address(0));
+        depositContract = new RemitDeposit(address(usdc), address(0), admin);
 
         // ── Real FeeCalculator (UUPS proxy) ───────────────────────────────────
         RemitFeeCalculator feeCalcImpl = new RemitFeeCalculator();
@@ -96,7 +96,7 @@ contract TestBase is Test {
         realTab = new RemitTab(address(usdc), address(realFeeCalc), feeRecipient, admin, address(0));
         realStream = new RemitStream(address(usdc), address(realFeeCalc), feeRecipient, address(0));
         realBounty = new RemitBounty(address(usdc), address(realFeeCalc), feeRecipient, admin, address(0));
-        realDeposit = new RemitDeposit(address(usdc), address(0));
+        realDeposit = new RemitDeposit(address(usdc), address(0), admin);
 
         // Authorize real contracts in real fee calculator.
         vm.startPrank(admin);
