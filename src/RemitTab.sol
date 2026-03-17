@@ -45,6 +45,17 @@ contract RemitTab is IRemitTab, ReentrancyGuard, EIP712 {
     IRemitKeyRegistry public immutable keyRegistry;
 
     // =========================================================================
+    // Relayer authorization
+    // =========================================================================
+
+    mapping(address => bool) private _authorizedRelayers;
+
+    modifier onlyAuthorizedRelayer() {
+        if (!_authorizedRelayers[msg.sender]) revert RemitErrors.Unauthorized(msg.sender);
+        _;
+    }
+
+    // =========================================================================
     // Storage
     // =========================================================================
 
@@ -157,6 +168,136 @@ contract RemitTab is IRemitTab, ReentrancyGuard, EIP712 {
         }
 
         _settleTab(tabId, tab, totalCharged);
+    }
+
+    // =========================================================================
+    // For Variants (relayer-submitted, agent pays)
+    // =========================================================================
+
+    /// @notice Open a tab on behalf of `payer` (relayer-submitted).
+    /// @dev Same logic as openTab but payer is an explicit parameter.
+    ///      Requires caller to be an authorized relayer.
+    function openTabFor(
+        address payer,
+        bytes32 tabId,
+        address provider,
+        uint96 limit,
+        uint64 perUnit,
+        uint64 expiry
+    ) external nonReentrant onlyAuthorizedRelayer {
+        if (payer == address(0)) revert RemitErrors.ZeroAddress();
+        if (_tabs[tabId].payer != address(0)) revert RemitErrors.EscrowAlreadyFunded(tabId);
+        if (provider == address(0)) revert RemitErrors.ZeroAddress();
+        if (provider == payer) revert RemitErrors.SelfPayment(payer);
+        if (limit < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(limit, RemitTypes.MIN_AMOUNT);
+        if (expiry <= block.timestamp) revert RemitErrors.InvalidTimeout(expiry);
+        RemitKeyValidator._validateAndRecord(keyRegistry, payer, limit, RemitTypes.PaymentType.TAB);
+
+        _tabs[tabId] = RemitTypes.Tab({
+            payer: payer,
+            limit: limit,
+            provider: provider,
+            totalCharged: 0,
+            perUnit: perUnit,
+            expiry: expiry,
+            status: RemitTypes.TabStatus.Open,
+            degradationTimestamp: 0,
+            disputedAmount: 0
+        });
+
+        usdc.safeTransferFrom(payer, address(this), limit);
+        emit RemitEvents.TabOpened(tabId, payer, provider, limit, perUnit, expiry);
+    }
+
+    /// @notice Close tab on behalf of `caller` (relayer-submitted).
+    /// @dev caller must be the tab's payer or provider.
+    function closeTabFor(
+        address caller,
+        bytes32 tabId,
+        uint96 totalCharged,
+        uint32 callCount,
+        bytes calldata providerSig
+    ) external nonReentrant onlyAuthorizedRelayer {
+        RemitTypes.Tab storage tab = _getTab(tabId);
+
+        if (tab.status != RemitTypes.TabStatus.Open) revert RemitErrors.TabDepleted(tabId);
+        if (caller != tab.payer && caller != tab.provider) revert RemitErrors.Unauthorized(caller);
+        if (totalCharged > tab.limit) revert RemitErrors.InsufficientBalance(tab.limit, totalCharged);
+
+        _verifyProviderSig(tabId, totalCharged, callCount, tab.provider, providerSig);
+        _settleTab(tabId, tab, totalCharged);
+    }
+
+    /// @notice Force-close an expired tab on behalf of `caller` (relayer-submitted).
+    function closeExpiredTabFor(
+        address caller,
+        bytes32 tabId,
+        uint96 totalCharged,
+        uint32 callCount,
+        bytes calldata providerSig
+    ) external nonReentrant onlyAuthorizedRelayer {
+        RemitTypes.Tab storage tab = _getTab(tabId);
+
+        if (tab.status != RemitTypes.TabStatus.Open) revert RemitErrors.TabDepleted(tabId);
+        if (block.timestamp <= tab.expiry) revert RemitErrors.InvalidTimeout(tab.expiry);
+        if (caller != tab.payer && caller != tab.provider) revert RemitErrors.Unauthorized(caller);
+        if (totalCharged > tab.limit) revert RemitErrors.InsufficientBalance(tab.limit, totalCharged);
+
+        if (totalCharged > 0) {
+            _verifyProviderSig(tabId, totalCharged, callCount, tab.provider, providerSig);
+        }
+
+        _settleTab(tabId, tab, totalCharged);
+    }
+
+    /// @notice File a partial dispute on behalf of `payer` (relayer-submitted).
+    function filePartialDisputeFor(
+        address payer,
+        bytes32 tabId,
+        uint64 degradationTimestamp,
+        uint96 undisputedAmount,
+        uint32 undisputedCallCount,
+        bytes calldata undisputedSig,
+        uint96 totalCharged,
+        uint32 totalCallCount,
+        bytes calldata totalSig
+    ) external nonReentrant onlyAuthorizedRelayer {
+        RemitTypes.Tab storage tab = _getTab(tabId);
+
+        if (payer != tab.payer) revert RemitErrors.Unauthorized(payer);
+        if (tab.status != RemitTypes.TabStatus.Open) revert RemitErrors.TabDepleted(tabId);
+        if (degradationTimestamp == 0 || degradationTimestamp > block.timestamp) {
+            revert RemitErrors.InvalidTimeout(degradationTimestamp);
+        }
+        if (undisputedAmount > totalCharged) revert RemitErrors.InsufficientBalance(totalCharged, undisputedAmount);
+        if (totalCharged > tab.limit) revert RemitErrors.InsufficientBalance(tab.limit, totalCharged);
+        if (totalCharged == undisputedAmount) revert RemitErrors.ZeroAmount();
+
+        _verifyProviderSig(tabId, undisputedAmount, undisputedCallCount, tab.provider, undisputedSig);
+        _verifyProviderSig(tabId, totalCharged, totalCallCount, tab.provider, totalSig);
+
+        _applyPartialDispute(tabId, tab, degradationTimestamp, undisputedAmount, totalCharged);
+    }
+
+    // =========================================================================
+    // Relayer Management
+    // =========================================================================
+
+    /// @notice Authorize a relayer address. Only callable by protocolAdmin.
+    function authorizeRelayer(address relayer) external {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        _authorizedRelayers[relayer] = true;
+    }
+
+    /// @notice Revoke a relayer address. Only callable by protocolAdmin.
+    function revokeRelayer(address relayer) external {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        _authorizedRelayers[relayer] = false;
+    }
+
+    /// @notice Check if an address is an authorized relayer.
+    function isAuthorizedRelayer(address relayer) external view returns (bool) {
+        return _authorizedRelayers[relayer];
     }
 
     /// @inheritdoc IRemitTab

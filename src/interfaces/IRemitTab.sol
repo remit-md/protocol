@@ -54,6 +54,16 @@ interface IRemitTab {
         bytes calldata totalSig
     ) external;
 
+    // === For Variants (relayer-submitted) ===
+
+    function openTabFor(address payer, bytes32 tabId, address provider, uint96 limit, uint64 perUnit, uint64 expiry) external;
+    function closeTabFor(address caller, bytes32 tabId, uint96 totalCharged, uint32 callCount, bytes calldata providerSig) external;
+    function closeExpiredTabFor(address caller, bytes32 tabId, uint96 totalCharged, uint32 callCount, bytes calldata providerSig) external;
+    function filePartialDisputeFor(address payer, bytes32 tabId, uint64 degradationTimestamp, uint96 undisputedAmount, uint32 undisputedCallCount, bytes calldata undisputedSig, uint96 totalCharged, uint32 totalCallCount, bytes calldata totalSig) external;
+    function authorizeRelayer(address relayer) external;
+    function revokeRelayer(address relayer) external;
+    function isAuthorizedRelayer(address relayer) external view returns (bool);
+
     /// @notice V2: Resolve a partial dispute (admin only). Split disputed amount.
     /// @param tabId The tab ID
     /// @param providerAmount Disputed portion going to provider
