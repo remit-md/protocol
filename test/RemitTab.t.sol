@@ -394,6 +394,8 @@ contract RemitTabTest is Test {
 
     function test_filePartialDisputeFor_happyPath() public {
         _authorizeRelayer();
+        // Warp forward so block.timestamp > 1 (avoids degradationTimestamp == 0)
+        vm.warp(1000);
         uint64 expiry = uint64(block.timestamp + EXPIRY_DELTA);
         vm.prank(relayer);
         tab.openTabFor(payer, TAB_FOR, provider, LIMIT, PER_UNIT, expiry);
