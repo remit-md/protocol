@@ -11,6 +11,8 @@ on:
           - UpgradeRouter.s.sol
           - RedeployContracts.s.sol
           - RedeployEscrow.s.sol
+          - RedeployTab.s.sol
+          - RedeployStream.s.sol
           - RedeployBounty.s.sol
           - RedeployDeposit.s.sol
           - RedeployMockUSDC.s.sol
