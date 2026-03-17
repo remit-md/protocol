@@ -311,6 +311,106 @@ contract RemitTabTest is Test {
     }
 
     // =========================================================================
+    // For Variants (relayer-submitted)
+    // =========================================================================
+
+    address internal relayer = makeAddr("relayer");
+    bytes32 constant TAB_FOR = keccak256("tab-for-001");
+
+    function _authorizeRelayer() internal {
+        vm.prank(makeAddr("tabAdmin"));
+        tab.authorizeRelayer(relayer);
+    }
+
+    function test_authorizeRelayer_works() public {
+        assertFalse(tab.isAuthorizedRelayer(relayer));
+        _authorizeRelayer();
+        assertTrue(tab.isAuthorizedRelayer(relayer));
+    }
+
+    function test_authorizeRelayer_revertsForStranger() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        vm.prank(stranger);
+        tab.authorizeRelayer(relayer);
+    }
+
+    function test_openTabFor_happyPath() public {
+        _authorizeRelayer();
+
+        uint64 expiry = uint64(block.timestamp + EXPIRY_DELTA);
+        uint256 payerBefore = usdc.balanceOf(payer);
+
+        vm.expectEmit(true, true, true, true);
+        emit RemitEvents.TabOpened(TAB_FOR, payer, provider, LIMIT, PER_UNIT, expiry);
+
+        vm.prank(relayer);
+        tab.openTabFor(payer, TAB_FOR, provider, LIMIT, PER_UNIT, expiry);
+
+        RemitTypes.Tab memory t = tab.getTab(TAB_FOR);
+        assertEq(t.payer, payer, "payer should be agent, not relayer");
+        assertEq(t.provider, provider);
+        assertEq(t.limit, LIMIT);
+        assertEq(payerBefore - usdc.balanceOf(payer), LIMIT, "payer debited");
+    }
+
+    function test_openTabFor_revertsForUnauthorized() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        vm.prank(stranger);
+        tab.openTabFor(payer, TAB_FOR, provider, LIMIT, PER_UNIT, uint64(block.timestamp + EXPIRY_DELTA));
+    }
+
+    function test_closeTabFor_happyPath() public {
+        _authorizeRelayer();
+        uint64 expiry = uint64(block.timestamp + EXPIRY_DELTA);
+        vm.prank(relayer);
+        tab.openTabFor(payer, TAB_FOR, provider, LIMIT, PER_UNIT, expiry);
+
+        uint96 charged = 50e6; // $50 charged
+        bytes memory sig = _signCharge(TAB_FOR, charged, 10);
+        uint256 payerBefore = usdc.balanceOf(payer);
+
+        vm.prank(relayer);
+        tab.closeTabFor(payer, TAB_FOR, charged, 10, sig);
+
+        assertEq(uint8(tab.getTab(TAB_FOR).status), uint8(RemitTypes.TabStatus.Closed));
+        // Payer gets refund (limit - charged = $50)
+        assertEq(usdc.balanceOf(payer) - payerBefore, LIMIT - charged, "payer refunded");
+    }
+
+    function test_closeExpiredTabFor_happyPath() public {
+        _authorizeRelayer();
+        uint64 expiry = uint64(block.timestamp + EXPIRY_DELTA);
+        vm.prank(relayer);
+        tab.openTabFor(payer, TAB_FOR, provider, LIMIT, PER_UNIT, expiry);
+
+        // Warp past expiry
+        vm.warp(expiry + 1);
+
+        vm.prank(relayer);
+        tab.closeExpiredTabFor(payer, TAB_FOR, 0, 0, "");
+
+        assertEq(uint8(tab.getTab(TAB_FOR).status), uint8(RemitTypes.TabStatus.Closed));
+    }
+
+    function test_filePartialDisputeFor_happyPath() public {
+        _authorizeRelayer();
+        uint64 expiry = uint64(block.timestamp + EXPIRY_DELTA);
+        vm.prank(relayer);
+        tab.openTabFor(payer, TAB_FOR, provider, LIMIT, PER_UNIT, expiry);
+
+        // Simulate some charges then a partial dispute
+        uint96 undisputed = 30e6;
+        uint96 total = 60e6;
+        bytes memory undisputedSig = _signCharge(TAB_FOR, undisputed, 5);
+        bytes memory totalSig = _signCharge(TAB_FOR, total, 10);
+
+        vm.prank(relayer);
+        tab.filePartialDisputeFor(payer, TAB_FOR, uint64(block.timestamp - 1), undisputed, 5, undisputedSig, total, 10, totalSig);
+
+        assertEq(uint8(tab.getTab(TAB_FOR).status), uint8(RemitTypes.TabStatus.PartiallyDisputed));
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 
