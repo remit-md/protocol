@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 /// @title IUSDC
-/// @notice Minimal interface for Circle's USDC contract, covering EIP-3009 transferWithAuthorization.
+/// @notice Minimal interface for Circle's USDC contract, covering EIP-3009 and EIP-2612.
 /// @dev Real USDC on Base/Ethereum and MockUSDC in test both implement this interface.
 interface IUSDC {
     /// @notice Execute a transfer on behalf of `from` using a pre-signed EIP-3009 authorization.
@@ -35,4 +35,22 @@ interface IUSDC {
 
     /// @notice Standard ERC-20 balanceOf.
     function balanceOf(address account) external view returns (uint256);
+
+    /// @notice Standard ERC-20 approve.
+    function approve(address spender, uint256 value) external returns (bool);
+
+    /// @notice Standard ERC-20 allowance.
+    function allowance(address owner, address spender) external view returns (uint256);
+
+    // ── EIP-2612: permit ────────────────────────────────────────────────────────
+
+    /// @notice Approve via off-chain signature (EIP-2612).
+    function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        external;
+
+    /// @notice Returns the current permit nonce for an address.
+    function nonces(address owner) external view returns (uint256);
+
+    /// @notice Returns the EIP-712 domain separator.
+    function DOMAIN_SEPARATOR() external view returns (bytes32);
 }
