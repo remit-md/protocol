@@ -4,28 +4,29 @@ pragma solidity ^0.8.24;
 import {Script, console2} from "forge-std/Script.sol";
 
 import {RemitRouter} from "../src/RemitRouter.sol";
-import {IUSDC} from "../src/interfaces/IUSDC.sol";
 
 /// @title UpgradeRouter
-/// @notice Upgrades the Router proxy to add settleX402() (V13 C0.4).
+/// @notice Upgrades the Router proxy to add relayer auth + payDirectFor + payPerRequestFor (V14 C0).
 ///
 /// @dev Run with:
 ///      forge script script/UpgradeRouter.s.sol \
-///        --broadcast --rpc-url $RPC_URL --private-key $DEPLOYER_PRIVATE_KEY
+///        --broadcast --rpc-url $ALCHEMY_BASE_SEPOLIA_URL --private-key $DEPLOYER_PRIVATE_KEY
 ///
-///      Storage layout is unchanged — only new function added.
+///      Storage layout: one new mapping added (_authorizedRelayers), gap reduced 50→49.
+///      Existing storage slots unchanged — safe for UUPS upgrade.
 contract UpgradeRouter is Script {
     /// @dev Current Router proxy address (Base Sepolia).
-    address constant ROUTER_PROXY = 0x887536bD817B758f99F090a80F48032a24f50916;
+    address constant ROUTER_PROXY = 0xb3E96ebE54138d1c0caea00Ae098309C7E0138eC;
 
     function run() external {
         address deployer = msg.sender;
-        console2.log("=== Router UUPS Upgrade (settleX402) ===");
+        console2.log("=== Router UUPS Upgrade (V14: relayer auth + For variants) ===");
         console2.log("Proxy:", ROUTER_PROXY);
         console2.log("Owner (deployer):", deployer);
 
         // Verify caller is the proxy owner.
-        address currentOwner = RemitRouter(ROUTER_PROXY).owner();
+        RemitRouter router = RemitRouter(ROUTER_PROXY);
+        address currentOwner = router.owner();
         require(currentOwner == deployer, "Deployer is not the proxy owner");
 
         vm.startBroadcast();
@@ -35,19 +36,23 @@ contract UpgradeRouter is Script {
         console2.log("New implementation:", address(newImpl));
 
         // 2. Upgrade proxy to new implementation (no re-initialization needed).
-        RemitRouter(ROUTER_PROXY).upgradeToAndCall(address(newImpl), "");
+        router.upgradeToAndCall(address(newImpl), "");
         console2.log("Proxy upgraded successfully.");
+
+        // 3. Authorize deployer as relayer (deployer == server signing key).
+        //    protocolAdmin == deployer (set in initialize), so this call is allowed.
+        router.authorizeRelayer(deployer);
+        console2.log("Relayer authorized:", deployer);
 
         vm.stopBroadcast();
 
-        // 3. Verify settleX402 selector is callable (view call to check it exists).
-        // Can't fully test without a signed EIP-3009 auth, but verify the proxy
-        // points to an impl that has the function.
-        console2.log("Fee recipient:", RemitRouter(ROUTER_PROXY).feeRecipient());
-        console2.log("USDC:", RemitRouter(ROUTER_PROXY).usdc());
+        // 4. Verify new functions are accessible.
+        bool isRelayer = router.isAuthorizedRelayer(deployer);
+        console2.log("isAuthorizedRelayer(deployer):", isRelayer);
+        require(isRelayer, "Relayer authorization failed");
 
         console2.log("");
         console2.log("=== Upgrade complete ===");
-        console2.log("New function: settleX402() - routes x402 payments through Router with fee split");
+        console2.log("New functions: payDirectFor, payPerRequestFor, authorizeRelayer, revokeRelayer");
     }
 }
