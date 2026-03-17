@@ -54,10 +54,10 @@ contract RedeployContracts is Script {
         //    Constructor arg order matters — verified against source:
         //      Escrow:  (usdc, feeCalc, protocolAdmin, feeRecipient, keyRegistry, arbitration)
         //      Tab:     (usdc, feeCalc, feeRecipient, protocolAdmin, keyRegistry)
-        //      Stream:  (usdc, feeCalc, feeRecipient, keyRegistry)
+        //      Stream:  (usdc, feeCalc, feeRecipient, protocolAdmin, keyRegistry)
         address newEscrow = address(new RemitEscrow(USDC, FEE_CALC, deployer, FEE_WALLET, KEY_REGISTRY, ARBITRATION));
         address newTab = address(new RemitTab(USDC, FEE_CALC, FEE_WALLET, deployer, KEY_REGISTRY));
-        address newStream = address(new RemitStream(USDC, FEE_CALC, FEE_WALLET, KEY_REGISTRY));
+        address newStream = address(new RemitStream(USDC, FEE_CALC, FEE_WALLET, deployer, KEY_REGISTRY));
 
         console2.log("New Escrow: ", newEscrow);
         console2.log("New Tab:    ", newTab);

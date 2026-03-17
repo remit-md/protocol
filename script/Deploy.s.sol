@@ -91,7 +91,7 @@ contract Deploy is Script {
         _tab = address(new RemitTab(usdcAddr, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         console2.log("RemitTab:      ", _tab);
 
-        _stream = address(new RemitStream(usdcAddr, _feeCalcProxy, feeRecipient, _keyRegistry));
+        _stream = address(new RemitStream(usdcAddr, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         console2.log("RemitStream:   ", _stream);
 
         _bounty = address(new RemitBounty(usdcAddr, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));

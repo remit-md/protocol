@@ -405,7 +405,7 @@ contract StreamInvariantTest is Test {
     function setUp() public {
         usdc = new MockUSDC();
         feeCalc = new MockFeeCalculator();
-        streamContract = new RemitStream(address(usdc), address(feeCalc), feeRecipient, address(0));
+        streamContract = new RemitStream(address(usdc), address(feeCalc), feeRecipient, makeAddr("admin"), address(0));
         handler = new StreamHandler(streamContract, usdc, feeCalc, feeRecipient);
         targetContract(address(handler));
     }

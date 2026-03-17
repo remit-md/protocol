@@ -86,7 +86,7 @@ contract DeployLocal is Script {
         _escrow =
             address(new RemitEscrow(_usdc, _feeCalcProxy, protocolAdmin, feeRecipient, _keyRegistry, _arbitration));
         _tab = address(new RemitTab(_usdc, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
-        _stream = address(new RemitStream(_usdc, _feeCalcProxy, feeRecipient, _keyRegistry));
+        _stream = address(new RemitStream(_usdc, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         _bounty = address(new RemitBounty(_usdc, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         _deposit = address(new RemitDeposit(_usdc, _keyRegistry, protocolAdmin));
         console2.log("Escrow:  ", _escrow);
