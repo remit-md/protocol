@@ -10,6 +10,7 @@ on:
         options:
           - UpgradeRouter.s.sol
           - RedeployContracts.s.sol
+          - RedeployEscrow.s.sol
           - RedeployBounty.s.sol
           - RedeployDeposit.s.sol
           - RedeployMockUSDC.s.sol
