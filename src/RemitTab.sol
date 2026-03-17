@@ -177,14 +177,11 @@ contract RemitTab is IRemitTab, ReentrancyGuard, EIP712 {
     /// @notice Open a tab on behalf of `payer` (relayer-submitted).
     /// @dev Same logic as openTab but payer is an explicit parameter.
     ///      Requires caller to be an authorized relayer.
-    function openTabFor(
-        address payer,
-        bytes32 tabId,
-        address provider,
-        uint96 limit,
-        uint64 perUnit,
-        uint64 expiry
-    ) external nonReentrant onlyAuthorizedRelayer {
+    function openTabFor(address payer, bytes32 tabId, address provider, uint96 limit, uint64 perUnit, uint64 expiry)
+        external
+        nonReentrant
+        onlyAuthorizedRelayer
+    {
         if (payer == address(0)) revert RemitErrors.ZeroAddress();
         if (_tabs[tabId].payer != address(0)) revert RemitErrors.EscrowAlreadyFunded(tabId);
         if (provider == address(0)) revert RemitErrors.ZeroAddress();

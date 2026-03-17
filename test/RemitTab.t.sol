@@ -407,7 +407,9 @@ contract RemitTabTest is Test {
         bytes memory totalSig = _signCharge(TAB_FOR, total, 10);
 
         vm.prank(relayer);
-        tab.filePartialDisputeFor(payer, TAB_FOR, uint64(block.timestamp - 1), undisputed, 5, undisputedSig, total, 10, totalSig);
+        tab.filePartialDisputeFor(
+            payer, TAB_FOR, uint64(block.timestamp - 1), undisputed, 5, undisputedSig, total, 10, totalSig
+        );
 
         assertEq(uint8(tab.getTab(TAB_FOR).status), uint8(RemitTypes.TabStatus.PartiallyDisputed));
     }

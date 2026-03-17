@@ -58,7 +58,13 @@ contract RemitStream is IRemitStream, ReentrancyGuard {
     /// @param _feeCalculator Fee calculator contract address
     /// @param _feeRecipient Address that receives protocol fees
     /// @param _keyRegistry V2: Session key registry (address(0) to disable)
-    constructor(address _usdc, address _feeCalculator, address _feeRecipient, address _protocolAdmin, address _keyRegistry) {
+    constructor(
+        address _usdc,
+        address _feeCalculator,
+        address _feeRecipient,
+        address _protocolAdmin,
+        address _keyRegistry
+    ) {
         if (_usdc == address(0)) revert RemitErrors.ZeroAddress();
         if (_feeCalculator == address(0)) revert RemitErrors.ZeroAddress();
         if (_feeRecipient == address(0)) revert RemitErrors.ZeroAddress();

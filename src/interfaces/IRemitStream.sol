@@ -33,7 +33,8 @@ interface IRemitStream {
 
     // === For Variants (relayer-submitted) ===
 
-    function openStreamFor(address payer, bytes32 streamId, address payee, uint64 ratePerSecond, uint96 maxTotal) external;
+    function openStreamFor(address payer, bytes32 streamId, address payee, uint64 ratePerSecond, uint96 maxTotal)
+        external;
     function withdrawFor(address payee, bytes32 streamId) external;
     function closeStreamFor(address caller, bytes32 streamId) external;
     function authorizeRelayer(address relayer) external;
