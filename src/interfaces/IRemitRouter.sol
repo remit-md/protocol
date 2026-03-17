@@ -38,11 +38,39 @@ interface IRemitRouter {
     /// @param memo Optional memo hash
     function payDirect(address to, uint96 amount, bytes32 memo) external;
 
+    /// @notice Make a direct payment on behalf of `payer` (relayer-submitted).
+    ///         The payer must have approved USDC to the Router (typically via EIP-2612 permit).
+    /// @param payer Address whose USDC is spent
+    /// @param to Recipient address
+    /// @param amount USDC amount (6 decimals)
+    /// @param memo Optional memo hash
+    function payDirectFor(address payer, address to, uint96 amount, bytes32 memo) external;
+
     /// @notice Make a pay-per-request payment (direct payment with service endpoint metadata)
     /// @param to Recipient address (service provider)
     /// @param amount USDC amount (6 decimals)
     /// @param endpoint Service endpoint URI being called (e.g. "https://api.example.com/v1/inference")
     function payPerRequest(address to, uint96 amount, string calldata endpoint) external;
+
+    /// @notice Make a pay-per-request payment on behalf of `payer` (relayer-submitted).
+    /// @param payer Address whose USDC is spent
+    /// @param to Recipient address (service provider)
+    /// @param amount USDC amount (6 decimals)
+    /// @param endpoint Service endpoint URI being called
+    function payPerRequestFor(address payer, address to, uint96 amount, string calldata endpoint) external;
+
+    /// @notice Authorize a relayer to call *For variants on behalf of users.
+    /// @param relayer Address to authorize
+    function authorizeRelayer(address relayer) external;
+
+    /// @notice Revoke a relayer's authorization.
+    /// @param relayer Address to revoke
+    function revokeRelayer(address relayer) external;
+
+    /// @notice Check if an address is an authorized relayer.
+    /// @param relayer Address to check
+    /// @return True if the relayer is authorized
+    function isAuthorizedRelayer(address relayer) external view returns (bool);
 
     /// @notice Settle an x402 payment through the Router.
     ///         The agent must have signed an EIP-3009 authorization with `to = address(Router)`.

@@ -501,4 +501,157 @@ contract RemitRouterTest is Test {
         // Fee recipient gets fees from both — but the direct recipient's balance should be unchanged.
         assertEq(usdc.balanceOf(recipient), recipientAfterDirect, "direct recipient unaffected");
     }
+
+    // =========================================================================
+    // Relayer authorization — authorize / revoke / isAuthorizedRelayer
+    // =========================================================================
+
+    address internal relayer = makeAddr("relayer");
+
+    function _authorizeRelayer() internal {
+        vm.prank(protocolAdmin);
+        router.authorizeRelayer(relayer);
+    }
+
+    function test_authorizeRelayer_works() public {
+        assertFalse(router.isAuthorizedRelayer(relayer));
+        _authorizeRelayer();
+        assertTrue(router.isAuthorizedRelayer(relayer));
+    }
+
+    function test_authorizeRelayer_revertsForStranger() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        vm.prank(stranger);
+        router.authorizeRelayer(relayer);
+    }
+
+    function test_authorizeRelayer_revertsOnZeroAddress() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.ZeroAddress.selector));
+        vm.prank(protocolAdmin);
+        router.authorizeRelayer(address(0));
+    }
+
+    function test_revokeRelayer_works() public {
+        _authorizeRelayer();
+        assertTrue(router.isAuthorizedRelayer(relayer));
+
+        vm.prank(protocolAdmin);
+        router.revokeRelayer(relayer);
+        assertFalse(router.isAuthorizedRelayer(relayer));
+    }
+
+    function test_revokeRelayer_revertsForStranger() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        vm.prank(stranger);
+        router.revokeRelayer(relayer);
+    }
+
+    // =========================================================================
+    // payDirectFor — happy path + conservation
+    // =========================================================================
+
+    function test_payDirectFor_happyPath() public {
+        _authorizeRelayer();
+
+        // Payer approves Router
+        vm.prank(payer);
+        usdc.approve(address(router), type(uint256).max);
+
+        uint96 fee = uint96((uint256(AMOUNT) * 100) / 10_000); // 1%
+        uint96 net = AMOUNT - fee;
+
+        uint256 payerBefore = usdc.balanceOf(payer);
+
+        vm.expectEmit(true, true, false, true);
+        emit RemitEvents.DirectPayment(payer, recipient, AMOUNT, fee, bytes32(0));
+
+        vm.prank(relayer);
+        router.payDirectFor(payer, recipient, AMOUNT, bytes32(0));
+
+        // Conservation: payer debited, recipient + feeRecipient credited
+        assertEq(payerBefore - usdc.balanceOf(payer), AMOUNT, "payer debited full amount");
+        assertEq(usdc.balanceOf(recipient), net, "recipient got net");
+        assertEq(usdc.balanceOf(feeRecipient), fee, "fee collected");
+        // Relayer balance unchanged (relayer never held USDC in this test)
+    }
+
+    function test_payDirectFor_revertsForUnauthorizedRelayer() public {
+        // Don't authorize — just call directly
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        vm.prank(stranger);
+        router.payDirectFor(payer, recipient, AMOUNT, bytes32(0));
+    }
+
+    function test_payDirectFor_revertsOnSelfPayment() public {
+        _authorizeRelayer();
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.SelfPayment.selector, payer));
+        vm.prank(relayer);
+        router.payDirectFor(payer, payer, AMOUNT, bytes32(0));
+    }
+
+    function test_payDirectFor_volumeRecordedForPayer() public {
+        _authorizeRelayer();
+        vm.prank(payer);
+        usdc.approve(address(router), type(uint256).max);
+
+        vm.prank(relayer);
+        router.payDirectFor(payer, recipient, AMOUNT, bytes32(0));
+
+        // Volume recorded for payer, not relayer
+        assertEq(feeCalc.monthlyVolume(payer), AMOUNT, "volume recorded for payer");
+        assertEq(feeCalc.monthlyVolume(relayer), 0, "no volume for relayer");
+    }
+
+    // =========================================================================
+    // payDirectFor — conservation fuzz
+    // =========================================================================
+
+    function testFuzz_payDirectFor_feeInvariant(uint96 amount) public {
+        amount = uint96(bound(amount, MIN, 50_000e6));
+
+        _authorizeRelayer();
+        usdc.mint(payer, amount);
+        vm.prank(payer);
+        usdc.approve(address(router), type(uint256).max);
+
+        uint256 payerBefore = usdc.balanceOf(payer);
+
+        vm.prank(relayer);
+        router.payDirectFor(payer, recipient, amount, bytes32(0));
+
+        uint256 recipientGot = usdc.balanceOf(recipient);
+        uint256 feeGot = usdc.balanceOf(feeRecipient);
+
+        // Conservation: payer's spend == recipient's receive + fee
+        assertEq(payerBefore - usdc.balanceOf(payer), recipientGot + feeGot, "conservation");
+        assertEq(recipientGot + feeGot, amount, "no dust lost");
+    }
+
+    // =========================================================================
+    // payPerRequestFor — happy path
+    // =========================================================================
+
+    function test_payPerRequestFor_happyPath() public {
+        _authorizeRelayer();
+        vm.prank(payer);
+        usdc.approve(address(router), type(uint256).max);
+
+        uint96 fee = uint96((uint256(AMOUNT) * 100) / 10_000);
+        uint96 net = AMOUNT - fee;
+
+        vm.expectEmit(true, true, false, true);
+        emit RemitEvents.PayPerRequest(payer, recipient, AMOUNT, fee, "https://api.example.com/v1/chat");
+
+        vm.prank(relayer);
+        router.payPerRequestFor(payer, recipient, AMOUNT, "https://api.example.com/v1/chat");
+
+        assertEq(usdc.balanceOf(recipient), net, "recipient got net");
+        assertEq(usdc.balanceOf(feeRecipient), fee, "fee collected");
+    }
+
+    function test_payPerRequestFor_revertsForUnauthorizedRelayer() public {
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        vm.prank(stranger);
+        router.payPerRequestFor(payer, recipient, AMOUNT, "https://api.example.com/v1/chat");
+    }
 }

@@ -53,6 +53,9 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     /// @dev V2: Session key registry. address(0) = key management not enabled.
     IRemitKeyRegistry public keyRegistry;
 
+    /// @dev V3: Authorized relayers (can call *For variants on behalf of users).
+    mapping(address => bool) private _authorizedRelayers;
+
     // =========================================================================
     // Constructor — disables direct initialization of implementation contract
     // =========================================================================
@@ -97,6 +100,11 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
 
     modifier onlyOwner() {
         if (msg.sender != _owner) revert RemitErrors.Unauthorized(msg.sender);
+        _;
+    }
+
+    modifier onlyAuthorizedRelayer() {
+        if (!_authorizedRelayers[msg.sender]) revert RemitErrors.Unauthorized(msg.sender);
         _;
     }
 
@@ -157,6 +165,76 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
         IRemitFeeCalculator(feeCalculator).recordTransaction(msg.sender, amount);
 
         emit RemitEvents.PayPerRequest(msg.sender, to, amount, fee, endpoint);
+    }
+
+    // =========================================================================
+    // IRemitRouter — payDirectFor / payPerRequestFor (relayer-submitted)
+    // =========================================================================
+
+    /// @inheritdoc IRemitRouter
+    /// @dev Relayer submits on behalf of `payer`. The payer must have approved
+    ///      this contract for `amount` USDC (typically via EIP-2612 permit).
+    ///      Fee is calculated and volume recorded against `payer`, not msg.sender.
+    function payDirectFor(address payer, address to, uint96 amount, bytes32 memo)
+        external
+        override
+        nonReentrant
+        onlyAuthorizedRelayer
+    {
+        if (payer == address(0)) revert RemitErrors.ZeroAddress();
+        if (to == address(0)) revert RemitErrors.ZeroAddress();
+        if (amount == 0) revert RemitErrors.ZeroAmount();
+        if (to == payer) revert RemitErrors.SelfPayment(payer);
+        if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
+
+        // Validate session key delegation against payer (not relayer)
+        RemitKeyValidator._validateAndRecord(keyRegistry, payer, amount, RemitTypes.PaymentType.DIRECT);
+
+        // Fee calculated against payer's volume tier
+        uint96 fee = IRemitFeeCalculator(feeCalculator).calculateFee(payer, amount);
+        uint96 netAmount = amount - fee;
+
+        // Pull from payer (not msg.sender)
+        IERC20(usdc).safeTransferFrom(payer, to, netAmount);
+
+        if (fee > 0) {
+            IERC20(usdc).safeTransferFrom(payer, feeRecipient, fee);
+        }
+
+        // Record volume for payer
+        IRemitFeeCalculator(feeCalculator).recordTransaction(payer, amount);
+
+        emit RemitEvents.DirectPayment(payer, to, amount, fee, memo);
+    }
+
+    /// @inheritdoc IRemitRouter
+    /// @dev Same as payDirectFor but emits PayPerRequest for endpoint tracking.
+    function payPerRequestFor(address payer, address to, uint96 amount, string calldata endpoint)
+        external
+        override
+        nonReentrant
+        onlyAuthorizedRelayer
+    {
+        if (payer == address(0)) revert RemitErrors.ZeroAddress();
+        if (to == address(0)) revert RemitErrors.ZeroAddress();
+        if (amount == 0) revert RemitErrors.ZeroAmount();
+        if (to == payer) revert RemitErrors.SelfPayment(payer);
+        if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
+
+        RemitKeyValidator._validateAndRecord(keyRegistry, payer, amount, RemitTypes.PaymentType.PAY_PER_REQUEST);
+
+        uint96 fee = IRemitFeeCalculator(feeCalculator).calculateFee(payer, amount);
+        uint96 netAmount = amount - fee;
+
+        IERC20(usdc).safeTransferFrom(payer, to, netAmount);
+
+        if (fee > 0) {
+            IERC20(usdc).safeTransferFrom(payer, feeRecipient, fee);
+        }
+
+        IRemitFeeCalculator(feeCalculator).recordTransaction(payer, amount);
+
+        emit RemitEvents.PayPerRequest(payer, to, amount, fee, endpoint);
     }
 
     // =========================================================================
@@ -266,6 +344,34 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     }
 
     // =========================================================================
+    // Relayer authorization (V3)
+    // =========================================================================
+
+    /// @notice Authorize a relayer to call *For variants on behalf of users.
+    /// @param relayer Address to authorize
+    function authorizeRelayer(address relayer) external {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        if (relayer == address(0)) revert RemitErrors.ZeroAddress();
+        _authorizedRelayers[relayer] = true;
+        emit RemitEvents.RelayerAuthorized(relayer);
+    }
+
+    /// @notice Revoke a relayer's authorization.
+    /// @param relayer Address to revoke
+    function revokeRelayer(address relayer) external {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        _authorizedRelayers[relayer] = false;
+        emit RemitEvents.RelayerRevoked(relayer);
+    }
+
+    /// @notice Check if an address is an authorized relayer.
+    /// @param relayer Address to check
+    /// @return True if the relayer is authorized
+    function isAuthorizedRelayer(address relayer) external view returns (bool) {
+        return _authorizedRelayers[relayer];
+    }
+
+    // =========================================================================
     // Admin helpers
     // =========================================================================
 
@@ -290,9 +396,9 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
     // =========================================================================
-    // Storage gap (reserve 50 slots for future upgrades)
+    // Storage gap (reserve 49 slots for future upgrades)
     // =========================================================================
 
     // solhint-disable-next-line var-name-mixedcase
-    uint256[50] private __gap;
+    uint256[49] private __gap;
 }
