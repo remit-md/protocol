@@ -20,6 +20,7 @@ contract RemitStreamTest is Test {
     address internal payer = makeAddr("payer");
     address internal payee = makeAddr("payee");
     address internal feeRecipient = makeAddr("feeRecipient");
+    address internal admin = makeAddr("streamAdmin");
     address internal stranger = makeAddr("stranger");
 
     bytes32 constant STREAM_ID = keccak256("stream-1");
@@ -32,7 +33,7 @@ contract RemitStreamTest is Test {
     function setUp() public {
         usdc = new MockUSDC();
         feeCalc = new MockFeeCalculator();
-        stream = new RemitStream(address(usdc), address(feeCalc), feeRecipient, address(0));
+        stream = new RemitStream(address(usdc), address(feeCalc), feeRecipient, admin, address(0));
 
         usdc.mint(payer, MINT_AMOUNT);
         vm.prank(payer);
@@ -534,16 +535,87 @@ contract RemitStreamTest is Test {
 
     function test_constructor_revert_zeroUsdc() public {
         vm.expectRevert(RemitErrors.ZeroAddress.selector);
-        new RemitStream(address(0), address(feeCalc), feeRecipient, address(0));
+        new RemitStream(address(0), address(feeCalc), feeRecipient, admin, address(0));
     }
 
     function test_constructor_revert_zeroFeeCalc() public {
         vm.expectRevert(RemitErrors.ZeroAddress.selector);
-        new RemitStream(address(usdc), address(0), feeRecipient, address(0));
+        new RemitStream(address(usdc), address(0), feeRecipient, admin, address(0));
     }
 
     function test_constructor_revert_zeroFeeRecipient() public {
         vm.expectRevert(RemitErrors.ZeroAddress.selector);
-        new RemitStream(address(usdc), address(feeCalc), address(0), address(0));
+        new RemitStream(address(usdc), address(feeCalc), address(0), admin, address(0));
+    }
+
+    // =========================================================================
+    // For Variants (relayer-submitted)
+    // =========================================================================
+
+    address internal relayer = makeAddr("relayer");
+    bytes32 constant STREAM_FOR = keccak256("stream-for-001");
+
+    function _authorizeRelayer() internal {
+        vm.prank(admin);
+        stream.authorizeRelayer(relayer);
+    }
+
+    function test_authorizeRelayer_works() public {
+        assertFalse(stream.isAuthorizedRelayer(relayer));
+        _authorizeRelayer();
+        assertTrue(stream.isAuthorizedRelayer(relayer));
+    }
+
+    function test_openStreamFor_happyPath() public {
+        _authorizeRelayer();
+
+        uint256 payerBefore = usdc.balanceOf(payer);
+
+        vm.expectEmit(true, true, true, true);
+        emit RemitEvents.StreamOpened(STREAM_FOR, payer, payee, RATE, MAX_TOTAL);
+
+        vm.prank(relayer);
+        stream.openStreamFor(payer, STREAM_FOR, payee, RATE, MAX_TOTAL);
+
+        RemitTypes.Stream memory s = stream.getStream(STREAM_FOR);
+        assertEq(s.payer, payer, "payer should be agent, not relayer");
+        assertEq(s.payee, payee);
+        assertEq(s.maxTotal, MAX_TOTAL);
+        assertEq(payerBefore - usdc.balanceOf(payer), MAX_TOTAL, "payer debited");
+    }
+
+    function test_openStreamFor_revertsForUnauthorized() public {
+        address stranger = makeAddr("stranger");
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
+        vm.prank(stranger);
+        stream.openStreamFor(payer, STREAM_FOR, payee, RATE, MAX_TOTAL);
+    }
+
+    function test_withdrawFor_happyPath() public {
+        _authorizeRelayer();
+        vm.prank(relayer);
+        stream.openStreamFor(payer, STREAM_FOR, payee, RATE, MAX_TOTAL);
+
+        vm.warp(block.timestamp + 100); // 100 seconds → 100 * RATE accrued
+
+        uint256 payeeBefore = usdc.balanceOf(payee);
+        vm.prank(relayer);
+        stream.withdrawFor(payee, STREAM_FOR);
+
+        assertGt(usdc.balanceOf(payee) - payeeBefore, 0, "payee received funds");
+    }
+
+    function test_closeStreamFor_happyPath() public {
+        _authorizeRelayer();
+        vm.prank(relayer);
+        stream.openStreamFor(payer, STREAM_FOR, payee, RATE, MAX_TOTAL);
+
+        vm.warp(block.timestamp + 100);
+
+        vm.prank(relayer);
+        stream.closeStreamFor(payer, STREAM_FOR);
+
+        RemitTypes.Stream memory s = stream.getStream(STREAM_FOR);
+        assertEq(uint8(s.status), uint8(RemitTypes.StreamStatus.Closed));
     }
 }

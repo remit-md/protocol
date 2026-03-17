@@ -29,8 +29,20 @@ contract RemitStream is IRemitStream, ReentrancyGuard {
     IERC20 public immutable usdc;
     IRemitFeeCalculator public immutable feeCalculator;
     address public immutable feeRecipient;
+    address public immutable protocolAdmin;
     /// @dev V2: Session key registry. address(0) = key management not enabled.
     IRemitKeyRegistry public immutable keyRegistry;
+
+    // =========================================================================
+    // Relayer authorization
+    // =========================================================================
+
+    mapping(address => bool) private _authorizedRelayers;
+
+    modifier onlyAuthorizedRelayer() {
+        if (!_authorizedRelayers[msg.sender]) revert RemitErrors.Unauthorized(msg.sender);
+        _;
+    }
 
     // =========================================================================
     // Storage
@@ -46,14 +58,16 @@ contract RemitStream is IRemitStream, ReentrancyGuard {
     /// @param _feeCalculator Fee calculator contract address
     /// @param _feeRecipient Address that receives protocol fees
     /// @param _keyRegistry V2: Session key registry (address(0) to disable)
-    constructor(address _usdc, address _feeCalculator, address _feeRecipient, address _keyRegistry) {
+    constructor(address _usdc, address _feeCalculator, address _feeRecipient, address _protocolAdmin, address _keyRegistry) {
         if (_usdc == address(0)) revert RemitErrors.ZeroAddress();
         if (_feeCalculator == address(0)) revert RemitErrors.ZeroAddress();
         if (_feeRecipient == address(0)) revert RemitErrors.ZeroAddress();
+        if (_protocolAdmin == address(0)) revert RemitErrors.ZeroAddress();
 
         usdc = IERC20(_usdc);
         feeCalculator = IRemitFeeCalculator(_feeCalculator);
         feeRecipient = _feeRecipient;
+        protocolAdmin = _protocolAdmin;
         keyRegistry = IRemitKeyRegistry(_keyRegistry);
     }
 
@@ -154,6 +168,111 @@ contract RemitStream is IRemitStream, ReentrancyGuard {
         if (fee > 0) usdc.safeTransfer(feeRecipient, fee);
 
         emit RemitEvents.StreamClosed(streamId, totalStreamed, refund, fee);
+    }
+
+    // =========================================================================
+    // For Variants (relayer-submitted, agent pays)
+    // =========================================================================
+
+    /// @notice Open a stream on behalf of `payer` (relayer-submitted).
+    function openStreamFor(address payer, bytes32 streamId, address payee, uint64 ratePerSecond, uint96 maxTotal)
+        external
+        nonReentrant
+        onlyAuthorizedRelayer
+    {
+        if (payer == address(0)) revert RemitErrors.ZeroAddress();
+        if (_streams[streamId].startedAt != 0) revert RemitErrors.EscrowAlreadyFunded(streamId);
+        if (payee == address(0)) revert RemitErrors.ZeroAddress();
+        if (payee == payer) revert RemitErrors.SelfPayment(payer);
+        if (maxTotal < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(maxTotal, RemitTypes.MIN_AMOUNT);
+        if (ratePerSecond == 0) revert RemitErrors.ZeroAmount();
+        RemitKeyValidator._validateAndRecord(keyRegistry, payer, maxTotal, RemitTypes.PaymentType.STREAM);
+
+        _streams[streamId] = RemitTypes.Stream({
+            payer: payer,
+            maxTotal: maxTotal,
+            payee: payee,
+            withdrawn: 0,
+            ratePerSecond: ratePerSecond,
+            startedAt: uint64(block.timestamp),
+            closedAt: 0,
+            status: RemitTypes.StreamStatus.Active
+        });
+
+        usdc.safeTransferFrom(payer, address(this), maxTotal);
+        emit RemitEvents.StreamOpened(streamId, payer, payee, ratePerSecond, maxTotal);
+    }
+
+    /// @notice Withdraw accrued funds on behalf of `payee` (relayer-submitted).
+    function withdrawFor(address payee, bytes32 streamId) external nonReentrant onlyAuthorizedRelayer {
+        RemitTypes.Stream storage stream = _streams[streamId];
+
+        if (stream.startedAt == 0) revert RemitErrors.StreamNotFound(streamId);
+        if (stream.status == RemitTypes.StreamStatus.Terminated) revert RemitErrors.StreamTerminated(streamId);
+        if (stream.status != RemitTypes.StreamStatus.Active) revert RemitErrors.AlreadyClosed(streamId);
+        if (payee != stream.payee) revert RemitErrors.Unauthorized(payee);
+
+        uint96 amount = _pendingWithdrawable(stream);
+        if (amount == 0) revert RemitErrors.ZeroAmount();
+
+        stream.withdrawn += amount;
+        usdc.safeTransfer(stream.payee, amount);
+        emit RemitEvents.StreamWithdrawal(streamId, stream.payee, amount);
+    }
+
+    /// @notice Close stream on behalf of `caller` (relayer-submitted).
+    /// @dev caller must be stream.payer or stream.payee.
+    function closeStreamFor(address caller, bytes32 streamId) external nonReentrant onlyAuthorizedRelayer {
+        RemitTypes.Stream storage stream = _streams[streamId];
+
+        if (stream.startedAt == 0) revert RemitErrors.StreamNotFound(streamId);
+        if (stream.status == RemitTypes.StreamStatus.Terminated) revert RemitErrors.StreamTerminated(streamId);
+        if (stream.status != RemitTypes.StreamStatus.Active) revert RemitErrors.AlreadyClosed(streamId);
+        if (caller != stream.payer && caller != stream.payee) {
+            revert RemitErrors.Unauthorized(caller);
+        }
+
+        uint64 elapsed = uint64(block.timestamp) - stream.startedAt;
+        uint96 totalStreamed = _cappedStream(stream.ratePerSecond, elapsed, stream.maxTotal);
+        uint96 pending = totalStreamed - stream.withdrawn;
+        uint96 refund = stream.maxTotal - totalStreamed;
+
+        uint96 fee = 0;
+        uint96 payeeGets = pending;
+        if (pending > 0) {
+            fee = feeCalculator.calculateFee(stream.payer, pending);
+            if (fee > pending) fee = pending;
+            payeeGets = pending - fee;
+        }
+
+        stream.status = RemitTypes.StreamStatus.Closed;
+        stream.closedAt = uint64(block.timestamp);
+
+        if (payeeGets > 0) usdc.safeTransfer(stream.payee, payeeGets);
+        if (refund > 0) usdc.safeTransfer(stream.payer, refund);
+        if (fee > 0) usdc.safeTransfer(feeRecipient, fee);
+
+        emit RemitEvents.StreamClosed(streamId, totalStreamed, refund, fee);
+    }
+
+    // =========================================================================
+    // Relayer Management
+    // =========================================================================
+
+    /// @notice Authorize a relayer address. Only callable by protocolAdmin.
+    function authorizeRelayer(address relayer) external {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        _authorizedRelayers[relayer] = true;
+    }
+
+    /// @notice Revoke a relayer address. Only callable by protocolAdmin.
+    function revokeRelayer(address relayer) external {
+        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        _authorizedRelayers[relayer] = false;
+    }
+
+    function isAuthorizedRelayer(address relayer) external view returns (bool) {
+        return _authorizedRelayers[relayer];
     }
 
     /// @inheritdoc IRemitStream

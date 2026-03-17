@@ -18,13 +18,14 @@ contract RemitStreamFuzzTest is Test {
     address internal payer = makeAddr("payer");
     address internal payee = makeAddr("payee");
     address internal feeRecipient = makeAddr("feeRecipient");
+    address internal admin = makeAddr("admin");
 
     bytes32 constant STREAM_ID = keccak256("fuzz-stream");
 
     function setUp() public {
         usdc = new MockUSDC();
         feeCalc = new MockFeeCalculator();
-        streamContract = new RemitStream(address(usdc), address(feeCalc), feeRecipient, address(0));
+        streamContract = new RemitStream(address(usdc), address(feeCalc), feeRecipient, admin, address(0));
 
         // Give payer a large allowance
         usdc.mint(payer, type(uint96).max);
