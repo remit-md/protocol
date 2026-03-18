@@ -19,6 +19,7 @@ on:
           - DeployOnrampVault.s.sol
           - UpgradeFeeCalculator.s.sol
           - DeployTestnet.s.sol
+          - AuthorizeDeployerAsRelayer.s.sol
       dry_run:
         description: "Simulate only (no broadcast)"
         required: false
