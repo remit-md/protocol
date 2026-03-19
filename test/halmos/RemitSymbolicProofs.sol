@@ -169,10 +169,14 @@ contract RemitSymbolicProofs is Test {
         vm.prank(payer);
         escrow.releaseEscrow(inv);
 
-        // Second release MUST revert
+        // Second release MUST revert (try/catch for Halmos compatibility)
         vm.prank(payer);
-        vm.expectRevert();
-        escrow.releaseEscrow(inv);
+        try escrow.releaseEscrow(inv) {
+            // If we get here, the second release succeeded — invariant violated
+            assert(false);
+        } catch {
+            // Expected: second release reverts — invariant holds
+        }
     }
 
     // =========================================================================
