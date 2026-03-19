@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 
+import {IOnrampVaultFactory} from "./interfaces/IOnrampVaultFactory.sol";
 import {RemitOnrampVault} from "./RemitOnrampVault.sol";
 
 /// @title OnrampVaultFactory
@@ -12,7 +13,7 @@ import {RemitOnrampVault} from "./RemitOnrampVault.sol";
 ///      No admin functions. Once deployed, the factory's parameters are frozen.
 ///
 ///      Gas: clone deployment ~45K gas (~$0.005 on Base).
-contract OnrampVaultFactory {
+contract OnrampVaultFactory is IOnrampVaultFactory {
     using Clones for address;
 
     // =========================================================================

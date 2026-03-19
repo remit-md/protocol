@@ -202,4 +202,25 @@ library RemitEvents {
 
     /// @notice Emitted when a relayer authorization is revoked
     event RelayerRevoked(address indexed relayer);
+
+    /// @notice Emitted when a fee calculator caller is authorized
+    event CallerAuthorized(address indexed caller);
+
+    /// @notice Emitted when a fee calculator caller authorization is revoked
+    event CallerRevoked(address indexed caller);
+
+    /// @notice Emitted when an escrow contract is authorized for arbitration
+    event EscrowContractAuthorized(address indexed escrowContract);
+
+    /// @notice Emitted when an escrow contract is deauthorized from arbitration
+    event EscrowContractDeauthorized(address indexed escrowContract);
+
+    /// @notice Emitted when a contract is authorized in the key registry
+    event ContractAuthorized(address indexed contractAddress);
+
+    /// @notice Emitted when a contract is deauthorized from the key registry
+    event ContractDeauthorized(address indexed contractAddress);
+
+    /// @notice Emitted when a router configuration value is updated
+    event ConfigUpdated(string key, address indexed value);
 }

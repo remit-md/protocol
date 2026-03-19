@@ -374,6 +374,7 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
         if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
         if (deadline <= block.timestamp) revert RemitErrors.InvalidTimeout(deadline);
         if (taskHash == bytes32(0)) revert RemitErrors.ZeroAmount();
+        RemitKeyValidator._validateAndRecord(keyRegistry, poster, amount, RemitTypes.PaymentType.BOUNTY);
 
         // --- Effects ---
         _bounties[bountyId] = RemitTypes.Bounty({
@@ -419,6 +420,9 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
         }
         if (evidenceHash == bytes32(0)) revert RemitErrors.ZeroAmount();
         if (submitter == bounty.poster) revert RemitErrors.SelfPayment(submitter);
+        if (bounty.submissionBond > 0) {
+            RemitKeyValidator._validateAndRecord(keyRegistry, submitter, bounty.submissionBond, RemitTypes.PaymentType.BOUNTY);
+        }
 
         // --- Effects ---
         _submissions[bountyId][submitter] = evidenceHash;

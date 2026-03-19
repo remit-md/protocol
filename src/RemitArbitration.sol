@@ -297,6 +297,7 @@ contract RemitArbitration is IRemitArbitration, ReentrancyGuard, Ownable {
     function authorizeEscrow(address escrowContract) external override onlyOwner {
         if (escrowContract == address(0)) revert RemitErrors.ZeroAddress();
         _authorizedEscrows[escrowContract] = true;
+        emit RemitEvents.EscrowContractAuthorized(escrowContract);
     }
 
     /// @inheritdoc IRemitArbitration
@@ -304,6 +305,7 @@ contract RemitArbitration is IRemitArbitration, ReentrancyGuard, Ownable {
     function deauthorizeEscrow(address escrowContract) external override onlyOwner {
         if (escrowContract == address(0)) revert RemitErrors.ZeroAddress();
         _authorizedEscrows[escrowContract] = false;
+        emit RemitEvents.EscrowContractDeauthorized(escrowContract);
     }
 
     // =========================================================================

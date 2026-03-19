@@ -9,24 +9,20 @@ library RemitErrors {
     error BelowMinimum(uint256 amount, uint256 minimum);
     error EscrowAlreadyFunded(bytes32 invoiceId);
     error EscrowNotFound(bytes32 invoiceId);
-    error EscrowExpired(bytes32 invoiceId);
     error EscrowFrozen(bytes32 invoiceId);
     error SelfPayment(address wallet);
 
     // Authorization
     error Unauthorized(address caller);
     error InvalidSignature();
-    error NonceReused(uint256 nonce);
 
     // Tab
     error TabDepleted(bytes32 tabId);
-    error TabExpired(bytes32 tabId);
     error TabNotFound(bytes32 tabId);
 
     // Stream
     error StreamNotFound(bytes32 streamId);
     error AlreadyClosed(bytes32 id);
-    error RateExceedsCap(uint256 rate, uint256 cap);
 
     // Bounty
     error BountyExpired(bytes32 bountyId);
@@ -37,7 +33,6 @@ library RemitErrors {
     error DepositNotFound(bytes32 depositId);
 
     // Dispute
-    error DisputeWindowClosed(bytes32 invoiceId);
     error DisputeAlreadyFiled(bytes32 invoiceId);
 
     // Milestone
@@ -58,7 +53,6 @@ library RemitErrors {
     // V2: Session key / delegation
     error DelegationExpired(address sessionKey);
     error DelegationLimitExceeded(address sessionKey, uint256 amount, uint256 limit);
-    error DelegationNotFound(address sessionKey);
 
     // V2: Streaming balance depletion
     error StreamTerminated(bytes32 streamId);
@@ -66,19 +60,14 @@ library RemitErrors {
     // V2: Bounty
     error BountyRejectionNoReason(bytes32 bountyId);
 
-    // V2: Dispute bonds
-    error DisputeBondInsufficient(uint256 provided, uint256 required);
-
     // V2: Arbitration
     error ArbitratorNotFound(address wallet);
     error ArbitratorAlreadyRegistered(address wallet);
-    error ArbitratorBondInsufficient(uint256 provided, uint256 required);
     error ArbitrationCaseNotFound(bytes32 invoiceId);
     error ArbitrationCaseAlreadyExists(bytes32 invoiceId);
     error StrikeAlreadyCast(bytes32 invoiceId);
     error InvalidPercentageSum(uint8 payerPercent, uint8 payeePercent);
     error ArbitrationDeadlinePassed(bytes32 invoiceId);
-    error PoolTooSmall(uint256 available, uint256 required);
     error EscalationNotReady(uint64 deadline);
     error NotArbitrationContract(address caller);
     error ArbitrationCooldownNotMet(uint64 releaseAt);

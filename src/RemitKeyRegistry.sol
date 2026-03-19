@@ -261,6 +261,7 @@ contract RemitKeyRegistry is IRemitKeyRegistry, ReentrancyGuard, EIP712, Ownable
     function authorizeContract(address contractAddress) external override onlyOwner {
         if (contractAddress == address(0)) revert RemitErrors.ZeroAddress();
         _authorizedContracts[contractAddress] = true;
+        emit RemitEvents.ContractAuthorized(contractAddress);
     }
 
     /// @inheritdoc IRemitKeyRegistry
@@ -268,6 +269,7 @@ contract RemitKeyRegistry is IRemitKeyRegistry, ReentrancyGuard, EIP712, Ownable
     function deauthorizeContract(address contractAddress) external override onlyOwner {
         if (contractAddress == address(0)) revert RemitErrors.ZeroAddress();
         _authorizedContracts[contractAddress] = false;
+        emit RemitEvents.ContractDeauthorized(contractAddress);
     }
 
     // =========================================================================

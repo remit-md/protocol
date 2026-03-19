@@ -127,12 +127,15 @@ contract RemitFeeCalculator is IRemitFeeCalculator, UUPSUpgradeable {
     function authorizeCaller(address caller) external onlyOwner {
         if (caller == address(0)) revert RemitErrors.ZeroAddress();
         authorizedCallers[caller] = true;
+        emit RemitEvents.CallerAuthorized(caller);
     }
 
     /// @notice Revoke a contract's authorization to call recordTransaction.
     /// @param caller The contract address to deauthorize.
     function revokeCaller(address caller) external onlyOwner {
+        if (caller == address(0)) revert RemitErrors.ZeroAddress();
         authorizedCallers[caller] = false;
+        emit RemitEvents.CallerRevoked(caller);
     }
 
     /// @notice Transfer ownership to a new address.

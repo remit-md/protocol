@@ -299,48 +299,57 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     function setEscrow(address newEscrow) external override onlyOwner {
         if (newEscrow == address(0)) revert RemitErrors.ZeroAddress();
         escrow = newEscrow;
+        emit RemitEvents.ConfigUpdated("escrow", newEscrow);
     }
 
     /// @inheritdoc IRemitRouter
     function setTab(address newTab) external override onlyOwner {
         if (newTab == address(0)) revert RemitErrors.ZeroAddress();
         tab = newTab;
+        emit RemitEvents.ConfigUpdated("tab", newTab);
     }
 
     /// @inheritdoc IRemitRouter
     function setStream(address newStream) external override onlyOwner {
         if (newStream == address(0)) revert RemitErrors.ZeroAddress();
         stream = newStream;
+        emit RemitEvents.ConfigUpdated("stream", newStream);
     }
 
     /// @inheritdoc IRemitRouter
     function setBounty(address newBounty) external override onlyOwner {
         if (newBounty == address(0)) revert RemitErrors.ZeroAddress();
         bounty = newBounty;
+        emit RemitEvents.ConfigUpdated("bounty", newBounty);
     }
 
     /// @inheritdoc IRemitRouter
     function setDeposit(address newDeposit) external override onlyOwner {
         if (newDeposit == address(0)) revert RemitErrors.ZeroAddress();
         deposit = newDeposit;
+        emit RemitEvents.ConfigUpdated("deposit", newDeposit);
     }
 
     /// @inheritdoc IRemitRouter
     function setFeeCalculator(address newFeeCalculator) external override onlyOwner {
         if (newFeeCalculator == address(0)) revert RemitErrors.ZeroAddress();
         feeCalculator = newFeeCalculator;
+        emit RemitEvents.ConfigUpdated("feeCalculator", newFeeCalculator);
     }
 
     /// @inheritdoc IRemitRouter
     function setFeeRecipient(address newFeeRecipient) external override onlyOwner {
         if (newFeeRecipient == address(0)) revert RemitErrors.ZeroAddress();
         feeRecipient = newFeeRecipient;
+        emit RemitEvents.ConfigUpdated("feeRecipient", newFeeRecipient);
     }
 
     /// @notice Set the KeyRegistry contract (V2: session key delegation). address(0) disables key management.
     /// @param newKeyRegistry The RemitKeyRegistry contract address
     function setKeyRegistry(address newKeyRegistry) external onlyOwner {
+        if (newKeyRegistry == address(0)) revert RemitErrors.ZeroAddress();
         keyRegistry = IRemitKeyRegistry(newKeyRegistry);
+        emit RemitEvents.ConfigUpdated("keyRegistry", newKeyRegistry);
     }
 
     // =========================================================================

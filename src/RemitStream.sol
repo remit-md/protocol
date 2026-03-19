@@ -139,7 +139,8 @@ contract RemitStream is IRemitStream, ReentrancyGuard {
     /// @inheritdoc IRemitStream
     /// @dev Either party (payer or payee) may close.
     ///      Fee is charged only on the pending (non-withdrawn) accrued amount.
-    ///      CEI: validate → mark closed → distribute funds
+    ///      CEI: validate + fee calc → mark closed → distribute funds
+    ///      Note: calculateFee is an external call before state writes; nonReentrant guards this.
     function closeStream(bytes32 streamId) external nonReentrant {
         RemitTypes.Stream storage stream = _streams[streamId];
 
@@ -268,13 +269,16 @@ contract RemitStream is IRemitStream, ReentrancyGuard {
     /// @notice Authorize a relayer address. Only callable by protocolAdmin.
     function authorizeRelayer(address relayer) external {
         if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        if (relayer == address(0)) revert RemitErrors.ZeroAddress();
         _authorizedRelayers[relayer] = true;
+        emit RemitEvents.RelayerAuthorized(relayer);
     }
 
     /// @notice Revoke a relayer address. Only callable by protocolAdmin.
     function revokeRelayer(address relayer) external {
         if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
         _authorizedRelayers[relayer] = false;
+        emit RemitEvents.RelayerRevoked(relayer);
     }
 
     function isAuthorizedRelayer(address relayer) external view returns (bool) {

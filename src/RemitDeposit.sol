@@ -180,6 +180,7 @@ contract RemitDeposit is IRemitDeposit, ReentrancyGuard {
         if (provider == depositor) revert RemitErrors.SelfPayment(depositor);
         if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
         if (expiry <= block.timestamp) revert RemitErrors.InvalidTimeout(expiry);
+        RemitKeyValidator._validateAndRecord(keyRegistry, depositor, amount, RemitTypes.PaymentType.DEPOSIT);
 
         // --- Effects ---
         _deposits[depositId] = RemitTypes.Deposit({

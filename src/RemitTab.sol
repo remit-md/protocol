@@ -283,13 +283,16 @@ contract RemitTab is IRemitTab, ReentrancyGuard, EIP712 {
     /// @notice Authorize a relayer address. Only callable by protocolAdmin.
     function authorizeRelayer(address relayer) external {
         if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        if (relayer == address(0)) revert RemitErrors.ZeroAddress();
         _authorizedRelayers[relayer] = true;
+        emit RemitEvents.RelayerAuthorized(relayer);
     }
 
     /// @notice Revoke a relayer address. Only callable by protocolAdmin.
     function revokeRelayer(address relayer) external {
         if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
         _authorizedRelayers[relayer] = false;
+        emit RemitEvents.RelayerRevoked(relayer);
     }
 
     /// @notice Check if an address is an authorized relayer.
