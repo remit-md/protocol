@@ -73,8 +73,12 @@ contract RemitSymbolicProofs is Test {
         // INV: payout > 0 for all valid amounts (payee always receives something)
         assert(payout > 0);
 
-        // INV: fee rate is exactly 1% (rounded down)
-        assert(fee * 10_000 <= uint256(amount) * FEE_RATE_BPS);
+        // INV: fee is exactly the integer quotient (no rounding error leakage)
+        // Decompose: fee * 10_000 + remainder == amount * FEE_RATE_BPS
+        // Solver-friendly form of: fee * 10_000 <= amount * FEE_RATE_BPS
+        uint256 product = uint256(amount) * FEE_RATE_BPS;
+        uint256 remainder = product % 10_000;
+        assert(fee * 10_000 + remainder == product);
     }
 
     // =========================================================================
