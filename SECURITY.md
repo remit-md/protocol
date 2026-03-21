@@ -202,12 +202,12 @@ An external audit engagement is planned before mainnet launch. This document, al
 If you discover a security vulnerability in the Remit protocol contracts, please report it
 **privately** before public disclosure.
 
-**Contact:** hello@remit.md
+**Contact:** security@remit.md
 **Subject:** `[SECURITY] <brief description>`
 
 **Response commitment:**
 - Acknowledgment within 48 hours
-- Status update within 7 days
+- Initial assessment within 5 business days
 - Fix + disclosure timeline agreed within 30 days
 
 **Scope (in scope for bounty consideration):**
@@ -218,12 +218,41 @@ If you discover a security vulnerability in the Remit protocol contracts, please
 
 **Out of scope:**
 - Server API (proprietary, not in this repository)
+- Front-end applications (dashboard, playground)
+- Documentation and configuration files
+- Issues in third-party dependencies (report to the upstream project)
 - Informational findings from automated scanners without proven exploitability
 - Theoretical risks accepted in this document (PRNG in arbitration)
+- Gas optimization suggestions (use regular issues)
 
 **Please do not:** open public GitHub issues for security vulnerabilities, post on social media,
 or disclose to third parties before we have had a chance to fix and coordinate disclosure.
 
 ---
 
-*Last updated: 2026-03-13*
+## Bug Bounty Rewards
+
+Rewards are paid in USDC on Base for confirmed vulnerabilities:
+
+| Severity | Impact | Reward |
+|----------|--------|--------|
+| Critical | Direct fund drain, unauthorized token transfers | $5,000 - $25,000 |
+| High | Fund lockup, permanent griefing, fee bypass | $2,000 - $10,000 |
+| Medium | Logic errors affecting state, access control bypass (non-fund) | $500 - $2,000 |
+| Low | Gas optimization with measurable impact, minor logic issues | $100 - $500 |
+
+Reward amounts are determined based on severity, impact, and quality of the report.
+
+**Rules:**
+- Do not exploit vulnerabilities on mainnet. Use a local fork for testing.
+- Do not publicly disclose vulnerabilities before they are fixed.
+- One vulnerability per report.
+- First reporter of a given vulnerability receives the reward.
+
+**Safe Harbor:** We will not pursue legal action against researchers who act in good faith,
+follow this disclosure policy, do not access or modify other users' data, do not disrupt the
+protocol's normal operation, and report findings promptly.
+
+---
+
+*Last updated: 2026-03-21*
