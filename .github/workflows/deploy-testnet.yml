@@ -29,6 +29,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: testnet
     steps:
       - uses: actions/checkout@v4
         with:

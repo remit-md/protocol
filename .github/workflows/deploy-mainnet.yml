@@ -1,0 +1,39 @@
+name: Deploy Mainnet
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Simulate only (no broadcast)"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Build
+        run: forge build
+
+      - name: Run mainnet deploy script
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.MAINNET_DEPLOYER_PRIVATE_KEY }}
+          RPC_URL: ${{ secrets.ALCHEMY_BASE_MAINNET_URL }}
+          GNOSIS_SAFE: ${{ secrets.GNOSIS_SAFE_ADDRESS }}
+          FEE_WALLET: ${{ secrets.MAINNET_FEE_WALLET }}
+          USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+        run: |
+          FLAGS="--rpc-url $RPC_URL --private-key $DEPLOYER_PRIVATE_KEY -vvvv"
+          if [ "${{ inputs.dry_run }}" = "false" ]; then
+            FLAGS="$FLAGS --broadcast --verify --etherscan-api-key ${{ secrets.BASESCAN_API_KEY }}"
+          fi
+          forge script script/DeployMainnet.s.sol $FLAGS
