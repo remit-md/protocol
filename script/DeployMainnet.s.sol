@@ -13,11 +13,10 @@ import {RemitBounty} from "../src/RemitBounty.sol";
 import {RemitDeposit} from "../src/RemitDeposit.sol";
 import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
 import {RemitArbitration} from "../src/RemitArbitration.sol";
-import {RemitOnrampVault} from "../src/RemitOnrampVault.sol";
-import {OnrampVaultFactory} from "../src/OnrampVaultFactory.sol";
 
 /// @title DeployMainnet
 /// @notice Mainnet deployment script. Uses real USDC (no MockUSDC).
+///         Does NOT deploy OnrampVaultFactory (deimplemented at server level — D6).
 ///         Reads admin and fee-recipient from environment so they can be set to a
 ///         Gnosis Safe multi-sig before going live (highly recommended).
 ///
@@ -53,7 +52,6 @@ contract DeployMainnet is Script {
     address internal _stream;
     address internal _bounty;
     address internal _deposit;
-    address internal _onrampVaultFactory;
 
     function run() external {
         address deployer = msg.sender;
@@ -81,7 +79,6 @@ contract DeployMainnet is Script {
         _authorizeArbitration();
         _deployRouter(admin, admin, feeRecipient);
         _wireRouter();
-        _deployOnrampVaultFactory(feeRecipient);
         vm.stopBroadcast();
 
         _logSummary(deployer, admin, feeRecipient);
@@ -166,13 +163,6 @@ contract DeployMainnet is Script {
         RemitFeeCalculator(_feeCalcProxy).authorizeCaller(_routerProxy);
     }
 
-    function _deployOnrampVaultFactory(address feeRecipient) internal {
-        RemitOnrampVault vaultImpl = new RemitOnrampVault();
-        _onrampVaultFactory = address(new OnrampVaultFactory(address(vaultImpl), MAINNET_USDC, feeRecipient));
-        console2.log("OnrampVault (impl):   ", address(vaultImpl));
-        console2.log("OnrampVaultFactory:   ", _onrampVaultFactory);
-    }
-
     function _logSummary(address deployer, address admin, address feeRecipient) internal view {
         console2.log("");
         console2.log("=== Deployment Complete ===");
@@ -192,7 +182,6 @@ contract DeployMainnet is Script {
         console2.log("Stream:        ", _stream);
         console2.log("Bounty:        ", _bounty);
         console2.log("Deposit:       ", _deposit);
-        console2.log("VaultFactory:  ", _onrampVaultFactory);
         console2.log("");
         console2.log("=== Server .env snippet ===");
         console2.log("CHAIN_ID=8453");
@@ -205,7 +194,6 @@ contract DeployMainnet is Script {
         console2.log("STREAM_ADDRESS=", _stream);
         console2.log("BOUNTY_ADDRESS=", _bounty);
         console2.log("DEPOSIT_ADDRESS=", _deposit);
-        console2.log("ONRAMP_VAULT_FACTORY_ADDRESS=", _onrampVaultFactory);
         console2.log("");
         console2.log("=== NEXT STEPS ===");
         console2.log("1. Record all addresses above in your deployment log");
