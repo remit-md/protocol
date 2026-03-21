@@ -128,9 +128,9 @@ contract TestRouterMigration is Script {
         console2.log("=== ALL CHECKS PASSED ===");
         console2.log("1. Deployed duplicate Tab at:", newTab);
         console2.log("2. Authorized with FeeCalc + KeyRegistry + Relayer");
-        console2.log("3. Router.setTab(newTab) succeeded — migration works");
+        console2.log("3. Router.setTab(newTab) succeeded -- migration works");
         console2.log("4. Old Tab contract unaffected (still has code)");
-        console2.log("5. Router.setTab(oldTab) succeeded — revert works");
+        console2.log("5. Router.setTab(oldTab) succeeded -- revert works");
         console2.log("6. Router restored to original state");
         console2.log("");
         console2.log("Incident response playbook VALIDATED:");
