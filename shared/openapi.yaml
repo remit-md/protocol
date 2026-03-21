@@ -5,11 +5,11 @@ info:
   description: Universal payment protocol for AI agents using USDC on EVM L2 chains
 
 servers:
-  - url: https://api.remit.md/api/v0
+  - url: https://api.remit.md/api/v1
     description: Production (Base mainnet)
-  - url: https://testnet.remit.md/api/v0
+  - url: https://testnet.remit.md/api/v1
     description: Testnet (Base Sepolia)
-  - url: http://localhost:3000/api/v0
+  - url: http://localhost:3000/api/v1
     description: Local development
 
 security:

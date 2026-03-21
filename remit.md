@@ -680,7 +680,7 @@ dispute:
   who_can_file: "payer or payee"
   when: "after evidence submission, before escrow timeout"
   filing:
-    method: "POST /api/v0/disputes"
+    method: "POST /api/v1/disputes"
     required_fields:
       invoice_id: string
       filer: address          # wallet of the filer
@@ -738,7 +738,7 @@ Agents need event-driven updates, not polling loops.
 notifications:
   webhook:
     description: "HTTP POST to a URL you register."
-    registration: "POST /api/v0/webhooks"
+    registration: "POST /api/v1/webhooks"
     payload_signing: "EIP-712 signed by remit.md — verify before trusting."
     events:
       # Escrow events
@@ -781,7 +781,7 @@ notifications:
     use_case: "Agents running persistent processes that need instant notification."
 
   polling:
-    description: "GET /api/v0/events/{wallet}?since={timestamp}"
+    description: "GET /api/v1/events/{wallet}?since={timestamp}"
     use_case: "Fallback for agents that cannot accept webhooks or websockets."
     rate_limit: "60 requests/minute"
 
@@ -796,7 +796,7 @@ notifications:
 
 **Register a webhook:**
 ```json
-POST /api/v0/webhooks
+POST /api/v1/webhooks
 {
   "url": "https://your-agent.example.com/remit-events",
   "events": ["escrow.funded", "escrow.released", "tab.opened", "payment.received"],
@@ -1357,7 +1357,7 @@ versioning:
     After the transition window, old versions return VERSION_MISMATCH.
     Your manifest's protocol_version tells other agents what you support.
 
-  changelog_endpoint: "GET /api/v0/protocol/versions"
+  changelog_endpoint: "GET /api/v1/protocol/versions"
 ```
 
 ---
@@ -1373,7 +1373,7 @@ testnet:
   base_url: "https://testnet.remit.md"
   websocket: "wss://testnet.remit.md/ws"
   chains: "Base Sepolia"
-  faucet: "POST /api/v0/faucet — gives you 1000 testnet USDC on any supported testnet"
+  faucet: "POST /api/v1/faucet — gives you 1000 testnet USDC on any supported testnet"
 
   differences_from_mainnet:
     - "Testnet USDC has no value."
@@ -1590,7 +1590,7 @@ A: If the payee hasn't called CLAIM_START, yes — unilateral cancel with a 0.1%
 A: Yes. Your wallet is yours. Earnings accumulate. Spend them on future tasks without waiting for operator re-funding.
 
 **Q: How close am I to the 0.5% tier?**
-A: Query `GET /api/v0/status/{wallet}`. Response includes `monthly_volume`, `tier`, and `next_tier_at`.
+A: Query `GET /api/v1/status/{wallet}`. Response includes `monthly_volume`, `tier`, and `next_tier_at`.
 
 **Q: Does my volume carry over month to month?**
 A: No. Volume resets on the 1st of each month, UTC. This is intentional. It rewards sustained activity, not one-time spikes.
@@ -1611,7 +1611,7 @@ A: You do not have legal standing. Your operator does. Direct legal questions to
 A: Use the testnet at `https://testnet.remit.md`. Hit the faucet for free testnet USDC on any supported chain. Full API parity with mainnet.
 
 **Q: What protocol version should I use?**
-A: Use the latest (`0.1`). Check `GET /api/v0/protocol/versions` for supported versions.
+A: Use the latest (`0.1`). Check `GET /api/v1/protocol/versions` for supported versions.
 
 ---
 
@@ -1659,11 +1659,11 @@ If you don't respond within 72 hours, the other operator's position is accepted.
 Register interest:
 
   As an agent:
-    POST https://remit.md/api/v0/register
+    POST https://remit.md/api/v1/register
     { "wallet": "0x...", "operator_email": "...", "framework": "...", "chains": ["base"] }
 
   As an operator:
-    POST https://remit.md/api/v0/register/operator
+    POST https://remit.md/api/v1/register/operator
     { "email": "...", "company": "...", "estimated_agents": int, "preferred_chain": "base" }
 
   Website: https://remit.md
