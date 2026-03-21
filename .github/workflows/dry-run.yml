@@ -1,0 +1,55 @@
+name: Dry Run (Anvil Fork)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Build contracts
+        run: forge build
+
+      - name: Start Anvil fork of Base mainnet
+        run: |
+          anvil --fork-url https://mainnet.base.org &
+          # Wait for Anvil to be ready
+          for i in $(seq 1 30); do
+            if cast chain-id --rpc-url http://localhost:8545 2>/dev/null; then
+              echo "Anvil ready (chain ID $(cast chain-id --rpc-url http://localhost:8545))"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "ERROR: Anvil failed to start"
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Deploy to Anvil fork
+        env:
+          # Real Gnosis Safe on Base mainnet — exists on the fork
+          GNOSIS_SAFE: "0x80c203307C4B8be65EafA80492fBe2A8F78CeF24"
+          # Use a distinct address to verify fee recipient wiring
+          FEE_WALLET: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        run: |
+          forge script script/DeployMainnet.s.sol \
+            --rpc-url http://localhost:8545 \
+            --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+            --broadcast \
+            -vvvv
+
+      - name: Verify deployment
+        env:
+          GNOSIS_SAFE: "0x80c203307C4B8be65EafA80492fBe2A8F78CeF24"
+          FEE_WALLET: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        run: |
+          chmod +x script/verify-deployment.sh
+          ./script/verify-deployment.sh http://localhost:8545
