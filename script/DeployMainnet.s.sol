@@ -20,9 +20,16 @@ import {RemitArbitration} from "../src/RemitArbitration.sol";
 ///         Reads admin and fee-recipient from environment so they can be set to a
 ///         Gnosis Safe multi-sig before going live (highly recommended).
 ///
+///         Ownership model: deployer is the initial owner of all ownable contracts
+///         (FeeCalculator, KeyRegistry, Arbitration, Router) so it can configure
+///         authorizations and wiring. Ownership is transferred to GNOSIS_SAFE at
+///         the end. Fund-holding contracts (Escrow, Tab, Stream, Bounty, Deposit)
+///         have immutable protocolAdmin set to GNOSIS_SAFE from the start.
+///
 /// @dev Prerequisites:
 ///      - DEPLOYER_PRIVATE_KEY: key with ~0.05 ETH on Base mainnet for gas
-///      - GNOSIS_SAFE:          Gnosis Safe address (protocol admin + fee recipient)
+///      - GNOSIS_SAFE:          Gnosis Safe address (protocol admin + proxy owner)
+///      - FEE_WALLET:           Fee recipient address (defaults to GNOSIS_SAFE)
 ///      - ALCHEMY_BASE_MAINNET_URL: Base mainnet RPC URL
 ///      - ETHERSCAN_API_KEY:    for contract verification
 ///
@@ -35,10 +42,11 @@ import {RemitArbitration} from "../src/RemitArbitration.sol";
 ///          --etherscan-api-key $ETHERSCAN_API_KEY
 ///
 ///      Dry-run against Anvil fork:
-///        anvil --fork-url $ALCHEMY_BASE_MAINNET_URL --fork-block-number <block>
+///        anvil --fork-url https://mainnet.base.org
 ///        GNOSIS_SAFE=<safe_addr> forge script script/DeployMainnet.s.sol \
 ///          --rpc-url http://localhost:8545 \
-///          --private-key <anvil_key>
+///          --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+///          --broadcast
 contract DeployMainnet is Script {
     // Base mainnet USDC (Circle official, 6 decimals)
     address internal constant MAINNET_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
@@ -56,9 +64,8 @@ contract DeployMainnet is Script {
     function run() external {
         address deployer = msg.sender;
 
-        // Admin and fee recipient: default to deployer for dry-runs.
-        // Set GNOSIS_SAFE env var for production — ownership is transferred
-        // to the Safe after deploy.
+        // Admin: defaults to deployer when GNOSIS_SAFE is not set (dry-runs).
+        // For production: set GNOSIS_SAFE to the multisig address.
         address admin = vm.envOr("GNOSIS_SAFE", deployer);
         address feeRecipient = vm.envOr("FEE_WALLET", admin);
 
@@ -70,15 +77,32 @@ contract DeployMainnet is Script {
         console2.log("");
 
         vm.startBroadcast();
-        _deployFeeCalculator(admin);
-        _deployKeyRegistry(admin);
-        _deployArbitration(admin);
+
+        // Step 1: Deploy ownable contracts with DEPLOYER as initial owner.
+        // The deployer needs onlyOwner access to configure authorizations.
+        _deployFeeCalculator(deployer);
+        _deployKeyRegistry(deployer);
+        _deployArbitration(deployer);
+
+        // Step 2: Deploy fund-holding contracts with admin (Safe) as protocolAdmin.
+        // protocolAdmin is immutable — must be the Safe from the start.
         _deployFundHolding(admin, feeRecipient);
+
+        // Step 3: Configure authorizations (requires deployer = owner).
         _authorizeFundHolding();
         _authorizeKeyRegistry();
         _authorizeArbitration();
-        _deployRouter(admin, admin, feeRecipient);
+
+        // Step 4: Deploy Router with deployer as owner (for wiring),
+        // but admin as protocolAdmin and feeRecipient.
+        _deployRouter(deployer, admin, feeRecipient);
         _wireRouter();
+
+        // Step 5: Transfer ownership to the Safe (if admin != deployer).
+        if (admin != deployer) {
+            _transferOwnership(admin);
+        }
+
         vm.stopBroadcast();
 
         _logSummary(deployer, admin, feeRecipient);
@@ -163,6 +187,15 @@ contract DeployMainnet is Script {
         RemitFeeCalculator(_feeCalcProxy).authorizeCaller(_routerProxy);
     }
 
+    function _transferOwnership(address newOwner) internal {
+        RemitFeeCalculator(_feeCalcProxy).transferOwnership(newOwner);
+        RemitKeyRegistry(_keyRegistry).transferOwnership(newOwner);
+        RemitArbitration(_arbitration).transferOwnership(newOwner);
+        RemitRouter(_routerProxy).transferOwnership(newOwner);
+        console2.log("");
+        console2.log("Ownership transferred to:", newOwner);
+    }
+
     function _logSummary(address deployer, address admin, address feeRecipient) internal view {
         console2.log("");
         console2.log("=== Deployment Complete ===");
@@ -196,12 +229,10 @@ contract DeployMainnet is Script {
         console2.log("DEPOSIT_ADDRESS=", _deposit);
         console2.log("");
         console2.log("=== NEXT STEPS ===");
-        console2.log("1. Record all addresses above in your deployment log");
-        console2.log("2. Run verify-deployment.sh to sanity-check all wiring");
-        console2.log("3. Fund mainnet relayer wallet with ~0.1 ETH");
-        console2.log("4. Update server .env with CHAIN_ID=8453 + mainnet addresses");
-        console2.log("5. Trigger server deploy workflow");
-        console2.log("6. Update Ponder indexer env (PONDER_NETWORK=base, PONDER_START_BLOCK=<block>)");
-        console2.log("7. If GNOSIS_SAFE != deployer, confirm admin ownership in Safe UI");
+        console2.log("1. Run verify-deployment.sh to sanity-check all wiring");
+        console2.log("2. Fund mainnet relayer wallet with ~0.1 ETH");
+        console2.log("3. Update server .env with CHAIN_ID=8453 + mainnet addresses");
+        console2.log("4. Trigger server deploy workflow");
+        console2.log("5. Update Ponder indexer env (PONDER_NETWORK=base, PONDER_START_BLOCK=<block>)");
     }
 }
