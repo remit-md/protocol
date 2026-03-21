@@ -4,8 +4,15 @@ on:
   workflow_dispatch:
 
 # Verifies all contracts deployed by DeployMainnet.s.sol on Base mainnet (chain 8453).
-# Uses Etherscan API V2 (https://api.etherscan.io/v2/api?chainid=8453) — V1 is deprecated.
-# Addresses are hardcoded here (immutable once deployed). Update if contracts are redeployed.
+#
+# Uses Blockscout (base.blockscout.com) — free, no API key, supports Base mainnet natively.
+#
+# NOTE: Basescan (basescan.org) verification requires a paid Etherscan plan for Base mainnet
+# (the Etherscan V2 unified API charges per-chain for non-Ethereum chains). Blockscout is the
+# automated alternative. For Basescan: manually submit source via basescan.org/verifyContract
+# or upgrade the Etherscan API plan.
+#
+# Addresses are hardcoded (immutable once deployed). Update if contracts are redeployed.
 
 jobs:
   verify:
@@ -22,80 +29,81 @@ jobs:
       - name: Build
         run: forge build
 
-      - name: Verify contracts on Basescan (Etherscan V2)
+      - name: Verify contracts on Blockscout (Base mainnet)
         env:
-          ETHERSCAN_API_KEY: ${{ secrets.BASESCAN_API_KEY }}
           RPC_URL: ${{ secrets.ALCHEMY_BASE_MAINNET_URL }}
         run: |
           set +e  # Don't abort on first failure — verify all, report at end
 
-          # Common flags: Etherscan V2 endpoint + RPC for --guess-constructor-args
+          # Blockscout: free, no API key, supports Base mainnet
+          # https://base.blockscout.com
           V="--chain 8453 \
-             --etherscan-api-key $ETHERSCAN_API_KEY \
-             --verifier-url https://api.etherscan.io/v2/api?chainid=8453 \
+             --verifier blockscout \
+             --verifier-url https://base.blockscout.com/api \
              --rpc-url $RPC_URL \
              --guess-constructor-args \
              --watch"
 
           FAILED=0
 
-          echo "=== Verifying UUPS implementations (no constructor args) ==="
+          echo "=== Verifying UUPS implementations ==="
 
-          echo "Verifying RemitFeeCalculator impl..."
+          echo "Verifying RemitFeeCalculator impl (0xae8B402...)..."
           forge verify-contract 0xae8B402c79003f537631E2F30C3fE9924a649126 \
             src/RemitFeeCalculator.sol:RemitFeeCalculator $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitRouter impl..."
+          echo "Verifying RemitRouter impl (0x96E10D...)..."
           forge verify-contract 0x96E10D059bD708eE29a5492cF0663dfD09E4c2E7 \
             src/RemitRouter.sol:RemitRouter $V || FAILED=$((FAILED+1))
 
           echo ""
           echo "=== Verifying ERC1967 proxies ==="
 
-          echo "Verifying FeeCalculator proxy..."
+          echo "Verifying FeeCalculator proxy (0x463695...)..."
           forge verify-contract 0x463695aA6BAF2473cdE1273CEdFB4a9e8e86b9b7 \
             lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy $V || FAILED=$((FAILED+1))
 
-          echo "Verifying Router proxy..."
+          echo "Verifying Router proxy (0xAf2e21...)..."
           forge verify-contract 0xAf2e211BC585D3Ab37e9BD546Fb25747a09254D2 \
             lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy $V || FAILED=$((FAILED+1))
 
           echo ""
-          echo "=== Verifying immutable fund-holding contracts ==="
+          echo "=== Verifying immutable contracts ==="
 
-          echo "Verifying RemitKeyRegistry..."
+          echo "Verifying RemitKeyRegistry (0xB08B61...)..."
           forge verify-contract 0xB08B61453EbDeB3BA341458bF067f29F93F7BF0F \
             src/RemitKeyRegistry.sol:RemitKeyRegistry $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitArbitration..."
+          echo "Verifying RemitArbitration (0x7cD670...)..."
           forge verify-contract 0x7cD6700A4837ebF8aF85112154Cd59adCac39DCA \
             src/RemitArbitration.sol:RemitArbitration $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitEscrow..."
+          echo "Verifying RemitEscrow (0xc495f8...)..."
           forge verify-contract 0xc495f8aa159A59EBCE7BfA8205D9110ff71759ef \
             src/RemitEscrow.sol:RemitEscrow $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitTab..."
+          echo "Verifying RemitTab (0xAfcCC7...)..."
           forge verify-contract 0xAfcCC74d5FAe9fD26B3725ee84D21198d230c145 \
             src/RemitTab.sol:RemitTab $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitStream..."
+          echo "Verifying RemitStream (0xC0C66e...)..."
           forge verify-contract 0xC0C66e98a96c7b3575639464eddBe4a7c9f71CB2 \
             src/RemitStream.sol:RemitStream $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitBounty..."
+          echo "Verifying RemitBounty (0x027691...)..."
           forge verify-contract 0x027691F8e7b0FDb4ab532f7A0ab579c2EC19913C \
             src/RemitBounty.sol:RemitBounty $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitDeposit..."
+          echo "Verifying RemitDeposit (0x31fCa8...)..."
           forge verify-contract 0x31fCa8B58258723C409823292d291D295e98781e \
             src/RemitDeposit.sol:RemitDeposit $V || FAILED=$((FAILED+1))
 
           echo ""
           echo "=== Verification Summary ==="
           if [ "$FAILED" -gt 0 ]; then
-            echo "FAILED: $FAILED contract(s) failed to verify. Check output above."
+            echo "FAILED: $FAILED contract(s) failed to verify on Blockscout."
+            echo "Check output above. For Basescan: upgrade Etherscan plan or verify manually."
             exit 1
           else
-            echo "All 11 contracts verified successfully on Basescan."
+            echo "All 11 contracts verified successfully on Blockscout (base.blockscout.com)."
           fi
