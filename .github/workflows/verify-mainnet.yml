@@ -1,5 +1,9 @@
 name: Verify Mainnet Contracts
 
+concurrency:
+  group: verify-mainnet
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
 
@@ -17,6 +21,7 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: production
     steps:
       - uses: actions/checkout@v4

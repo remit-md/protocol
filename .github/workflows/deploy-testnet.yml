@@ -1,5 +1,9 @@
 name: Deploy Testnet
 
+concurrency:
+  group: deploy-testnet
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
     inputs:
@@ -30,6 +34,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: testnet
     steps:
       - uses: actions/checkout@v4
