@@ -60,3 +60,11 @@ jobs:
             FLAGS="$FLAGS --broadcast"
           fi
           forge script script/${{ inputs.script }} $FLAGS
+
+      - name: Upload broadcast artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: broadcast-testnet-${{ github.run_number }}
+          path: broadcast/**/*.json
+          retention-days: 90
