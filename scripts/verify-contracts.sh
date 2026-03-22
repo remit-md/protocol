@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Verify all remit.md contracts on Basescan
+# Verify all remit.md contracts on Blockscout (Base Sepolia)
 # Run after deploy-testnet.sh
+# Uses Blockscout (base-sepolia.blockscout.com) — free, no API key required.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,7 +16,6 @@ fi
 # shellcheck source=/dev/null
 source "$ENV_FILE"
 
-: "${BASESCAN_API_KEY:?Need BASESCAN_API_KEY}"
 : "${RPC_URL:?Need RPC_URL}"
 
 CAST="${CAST:-cast}"
@@ -23,7 +23,7 @@ FORGE="${FORGE:-forge}"
 
 cd "$PROJECT_ROOT/packages/contracts"
 
-echo "=== Verifying contracts on Basescan (Base Sepolia) ==="
+echo "=== Verifying contracts on Blockscout (Base Sepolia) ==="
 
 verify() {
   local name=$1
@@ -34,7 +34,8 @@ verify() {
   echo "→ Verifying $name at $addr..."
   $FORGE verify-contract "$addr" "src/$name.sol:$name" \
     --chain base-sepolia \
-    --etherscan-api-key "$BASESCAN_API_KEY" \
+    --verifier blockscout \
+    --verifier-url https://base-sepolia.blockscout.com/api \
     "${args[@]}" \
     --watch || echo "  WARNING: $name verification failed (may already be verified)"
 }
@@ -74,4 +75,4 @@ verify "RemitRouter" "$ROUTER_ADDRESS"
 
 echo ""
 echo "=== Verification Complete ==="
-echo "View contracts on Basescan: https://sepolia.basescan.org/"
+echo "View contracts on Blockscout: https://base-sepolia.blockscout.com/"

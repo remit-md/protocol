@@ -36,7 +36,7 @@ jobs:
           if [ "${{ inputs.dry_run }}" = "false" ]; then
             # --slow: send one tx at a time, wait for confirmation before the next.
             # Prevents Alchemy 429 rate limits from aborting the broadcast mid-deploy.
-            # --verifier-url: Etherscan API V2 unified endpoint (V1 basescan.org/api is deprecated).
-            FLAGS="$FLAGS --broadcast --slow --verify --etherscan-api-key ${{ secrets.BASESCAN_API_KEY }} --verifier-url https://api.etherscan.io/v2/api?chainid=8453"
+            # --verifier blockscout: free, no API key required. Basescan requires $49/mo paid plan for Base mainnet.
+            FLAGS="$FLAGS --broadcast --slow --verify --verifier blockscout --verifier-url https://base.blockscout.com/api"
           fi
           forge script script/DeployMainnet.s.sol $FLAGS

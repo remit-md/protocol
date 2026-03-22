@@ -10,7 +10,6 @@ echo "=== remit.md Testnet Deployment (Base Sepolia) ==="
 # -- Validate env -----------------------------------------------------------
 : "${DEPLOYER_PRIVATE_KEY:?Need DEPLOYER_PRIVATE_KEY}"
 : "${BASE_SEPOLIA_RPC_URL:?Need BASE_SEPOLIA_RPC_URL}"
-: "${BASESCAN_API_KEY:?Need BASESCAN_API_KEY}"
 : "${FEE_RECIPIENT:?Need FEE_RECIPIENT (operator wallet address)}"
 
 CHAIN_ID=84532   # Base Sepolia
@@ -25,7 +24,8 @@ forge script script/Deploy.s.sol:Deploy \
   --private-key "$DEPLOYER_PRIVATE_KEY" \
   --broadcast \
   --verify \
-  --etherscan-api-key "$BASESCAN_API_KEY" \
+  --verifier blockscout \
+  --verifier-url https://base-sepolia.blockscout.com/api \
   --chain-id "$CHAIN_ID" \
   -vvv
 
