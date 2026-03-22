@@ -3,6 +3,9 @@ name: Dry Run (Anvil Fork)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   dry-run:
     runs-on: ubuntu-latest
