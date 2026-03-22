@@ -48,3 +48,11 @@ jobs:
             FLAGS="$FLAGS --broadcast --slow --verify --verifier blockscout --verifier-url https://base.blockscout.com/api"
           fi
           forge script script/DeployMainnet.s.sol $FLAGS
+
+      - name: Upload broadcast artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: broadcast-mainnet-${{ github.run_number }}
+          path: broadcast/**/*.json
+          retention-days: 90
