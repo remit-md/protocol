@@ -18,6 +18,9 @@ on:
 #
 # Addresses are hardcoded (immutable once deployed). Update if contracts are redeployed.
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
