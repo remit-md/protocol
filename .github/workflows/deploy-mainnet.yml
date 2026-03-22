@@ -34,13 +34,13 @@ jobs:
 
       - name: Run mainnet deploy script
         env:
-          DEPLOYER_PRIVATE_KEY: ${{ secrets.MAINNET_DEPLOYER_PRIVATE_KEY }}
+          FOUNDRY_PRIVATE_KEY: ${{ secrets.MAINNET_DEPLOYER_PRIVATE_KEY }}
           RPC_URL: ${{ secrets.ALCHEMY_BASE_MAINNET_URL }}
           GNOSIS_SAFE: ${{ secrets.GNOSIS_SAFE_ADDRESS }}
           FEE_WALLET: ${{ secrets.MAINNET_FEE_WALLET }}
           USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
         run: |
-          FLAGS="--rpc-url $RPC_URL --private-key $DEPLOYER_PRIVATE_KEY -vvvv"
+          FLAGS="--rpc-url $RPC_URL -vvvv"
           if [ "${{ inputs.dry_run }}" = "false" ]; then
             # --slow: send one tx at a time, wait for confirmation before the next.
             # Prevents Alchemy 429 rate limits from aborting the broadcast mid-deploy.

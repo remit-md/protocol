@@ -52,10 +52,10 @@ jobs:
 
       - name: Run deploy script
         env:
-          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          FOUNDRY_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
           ALCHEMY_BASE_SEPOLIA_URL: ${{ secrets.ALCHEMY_BASE_SEPOLIA_URL }}
         run: |
-          FLAGS="--rpc-url $ALCHEMY_BASE_SEPOLIA_URL --private-key $DEPLOYER_PRIVATE_KEY -vvvv"
+          FLAGS="--rpc-url $ALCHEMY_BASE_SEPOLIA_URL -vvvv"
           if [ "${{ inputs.dry_run }}" = "false" ]; then
             FLAGS="$FLAGS --broadcast"
           fi
