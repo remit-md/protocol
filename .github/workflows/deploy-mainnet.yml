@@ -29,12 +29,12 @@ jobs:
     timeout-minutes: 30
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
 
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+        uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
 
       - name: Build
         run: forge build
@@ -57,7 +57,7 @@ jobs:
           forge script script/${{ inputs.script }} --private-key "$FOUNDRY_PRIVATE_KEY" $FLAGS
 
       - name: Upload broadcast artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: broadcast-mainnet-${{ github.run_number }}
