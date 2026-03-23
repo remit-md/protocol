@@ -98,8 +98,8 @@ jobs:
           forge verify-contract 0xC0C66e98a96c7b3575639464eddBe4a7c9f71CB2 \
             src/RemitStream.sol:RemitStream $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitBounty (0x027691...)..."
-          forge verify-contract 0x027691F8e7b0FDb4ab532f7A0ab579c2EC19913C \
+          echo "Verifying RemitBounty (0x6cf057...)..."
+          forge verify-contract 0x6cf0570078c831440866ad60dd4ff43ef676f5bb \
             src/RemitBounty.sol:RemitBounty $V || FAILED=$((FAILED+1))
 
           echo "Verifying RemitDeposit (0x31fCa8...)..."
