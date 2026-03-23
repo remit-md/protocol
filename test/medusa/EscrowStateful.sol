@@ -200,8 +200,6 @@ contract EscrowStateful {
         } catch {}
     }
 
-
-
     /// @notice Advance block time (enables timeout and default-win scenarios).
     function action_warpTime(uint64 delta) external {
         delta = _clamp64(delta, 0, 60 days);

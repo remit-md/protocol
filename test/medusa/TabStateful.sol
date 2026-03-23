@@ -211,7 +211,6 @@ contract TabStateful {
         } catch {}
     }
 
-
     /// @notice Advance block time (enables expiry and degradation scenarios).
     function action_warpTime(uint64 delta) external {
         delta = _clamp64(delta, 0, 60 days);

@@ -197,9 +197,6 @@ contract EscrowHandler is Test {
         _removeActive(idx);
     }
 
-
-
-
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     function activeCount() external view returns (uint256) {
@@ -211,7 +208,6 @@ contract EscrowHandler is Test {
         if (idx != last) _activeIds[idx] = _activeIds[last];
         _activeIds.pop();
     }
-
 }
 
 // =============================================================================
