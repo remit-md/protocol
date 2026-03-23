@@ -392,28 +392,6 @@ contract RemitTabTest is Test {
         assertEq(uint8(tab.getTab(TAB_FOR).status), uint8(RemitTypes.TabStatus.Closed));
     }
 
-    function test_filePartialDisputeFor_happyPath() public {
-        _authorizeRelayer();
-        // Warp forward so block.timestamp > 1 (avoids degradationTimestamp == 0)
-        vm.warp(1000);
-        uint64 expiry = uint64(block.timestamp + EXPIRY_DELTA);
-        vm.prank(relayer);
-        tab.openTabFor(payer, TAB_FOR, provider, LIMIT, PER_UNIT, expiry);
-
-        // Simulate some charges then a partial dispute
-        uint96 undisputed = 30e6;
-        uint96 total = 60e6;
-        bytes memory undisputedSig = _signCharge(TAB_FOR, undisputed, 5);
-        bytes memory totalSig = _signCharge(TAB_FOR, total, 10);
-
-        vm.prank(relayer);
-        tab.filePartialDisputeFor(
-            payer, TAB_FOR, uint64(block.timestamp - 1), undisputed, 5, undisputedSig, total, 10, totalSig
-        );
-
-        assertEq(uint8(tab.getTab(TAB_FOR).status), uint8(RemitTypes.TabStatus.PartiallyDisputed));
-    }
-
     // =========================================================================
     // Helpers
     // =========================================================================

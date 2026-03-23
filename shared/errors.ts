@@ -8,8 +8,6 @@ export enum ErrorCode {
   ESCROW_ALREADY_FUNDED = "ESCROW_ALREADY_FUNDED",
   ESCROW_NOT_FOUND = "ESCROW_NOT_FOUND",
   ESCROW_EXPIRED = "ESCROW_EXPIRED",
-  ESCROW_FROZEN = "ESCROW_FROZEN",
-
   // Chain errors (409/422)
   CHAIN_MISMATCH = "CHAIN_MISMATCH",
   CHAIN_UNSUPPORTED = "CHAIN_UNSUPPORTED",
@@ -41,11 +39,7 @@ export enum ErrorCode {
   BOUNTY_CLAIMED = "BOUNTY_CLAIMED",
   BOUNTY_MAX_ATTEMPTS = "BOUNTY_MAX_ATTEMPTS",
 
-  // Dispute errors (409/410)
-  DISPUTE_WINDOW_CLOSED = "DISPUTE_WINDOW_CLOSED",
-  DISPUTE_ALREADY_FILED = "DISPUTE_ALREADY_FILED",
-
-  // Rate limiting (429)
+// Rate limiting (429)
   RATE_LIMITED = "RATE_LIMITED",
 
   // Cancellation errors (409)
@@ -88,12 +82,7 @@ export const ERROR_METADATA: Record<ErrorCode, ErrorMetadata> = {
     httpStatus: 410,
     message: "Escrow timeout has passed. Funds already returned.",
   },
-  [ErrorCode.ESCROW_FROZEN]: {
-    code: ErrorCode.ESCROW_FROZEN,
-    httpStatus: 423,
-    message: "Escrow is frozen due to an active dispute.",
-  },
-  [ErrorCode.CHAIN_MISMATCH]: {
+[ErrorCode.CHAIN_MISMATCH]: {
     code: ErrorCode.CHAIN_MISMATCH,
     httpStatus: 409,
     message: "Payer and payee are on different chains. Same-chain required.",
@@ -188,17 +177,7 @@ export const ERROR_METADATA: Record<ErrorCode, ErrorMetadata> = {
     httpStatus: 422,
     message: "Maximum submission attempts reached for this bounty.",
   },
-  [ErrorCode.DISPUTE_WINDOW_CLOSED]: {
-    code: ErrorCode.DISPUTE_WINDOW_CLOSED,
-    httpStatus: 410,
-    message: "Escrow has already timed out or been released.",
-  },
-  [ErrorCode.DISPUTE_ALREADY_FILED]: {
-    code: ErrorCode.DISPUTE_ALREADY_FILED,
-    httpStatus: 409,
-    message: "A dispute is already active for this invoice.",
-  },
-  [ErrorCode.RATE_LIMITED]: {
+[ErrorCode.RATE_LIMITED]: {
     code: ErrorCode.RATE_LIMITED,
     httpStatus: 429,
     message: "Too many requests.",

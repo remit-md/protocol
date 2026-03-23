@@ -15,7 +15,7 @@ import {RemitTypes} from "../src/libraries/RemitTypes.sol";
 //
 // Ghost invariant (INV-E1):
 //   usdc.balanceOf(escrow) == ghost_total
-//   where ghost_total = inflows (createEscrow + bonds in) - outflows (releases/cancels/bonds out)
+//   where ghost_total = inflows (createEscrow) - outflows (releases/cancels)
 //
 // Additional invariant (INV-E3): terminal IDs are never revisited (enforced by test setup).
 // =============================================================================
@@ -37,13 +37,11 @@ contract EscrowHandler is Test {
     // Ghost variable: net USDC that should currently be in the escrow contract.
     uint256 public ghost_total;
 
-    // Non-terminal IDs (Funded or Active) — move to _disputedIds on fileDispute.
+    // Non-terminal IDs (Funded or Active).
     bytes32[] internal _activeIds;
-    // Disputed IDs — removed when resolved/defaultWin.
-    bytes32[] internal _disputedIds;
 
     mapping(bytes32 => uint96) internal _amount; // locked amount
-    mapping(bytes32 => uint8) internal _state; // 0=Funded, 1=Active, 2=Disputed
+    mapping(bytes32 => uint8) internal _state; // 0=Funded, 1=Active
     mapping(bytes32 => uint64) internal _timeout;
 
     uint256 internal _idCounter;
@@ -63,7 +61,7 @@ contract EscrowHandler is Test {
         payer = vm.addr(payerKey);
         payee = vm.addr(payeeKey);
 
-        // Pre-fund with ample USDC to cover bonds (up to 8x 5% of max amount per dispute).
+        // Pre-fund with ample USDC.
         usdc.mint(payer, 100_000e6);
         usdc.mint(payee, 100_000e6);
         vm.prank(payer);
@@ -199,95 +197,13 @@ contract EscrowHandler is Test {
         _removeActive(idx);
     }
 
-    // ── fileDispute ──────────────────────────────────────────────────────────
 
-    /// @dev Files a dispute (Funded/Active → Disputed). Bond enters contract.
-    function fileDispute(uint256 idx) external {
-        if (_activeIds.length == 0) return;
-        idx = bound(idx, 0, _activeIds.length - 1);
-        bytes32 id = _activeIds[idx];
-        if (_state[id] > 1) return; // Funded or Active only
 
-        bytes32 evidenceHash = keccak256(abi.encodePacked("dispute-evidence", id));
-
-        // Alternate filer: payer or payee based on index parity.
-        address filer = idx % 2 == 0 ? payer : payee;
-
-        uint256 balanceBefore = usdc.balanceOf(address(escrow));
-
-        vm.prank(filer);
-        try escrow.fileDispute(id, evidenceHash) {
-            // Bond entered contract. Measure delta.
-            uint256 balanceAfter = usdc.balanceOf(address(escrow));
-            // Bond in = balanceAfter - balanceBefore (typically positive or zero)
-            if (balanceAfter >= balanceBefore) {
-                ghost_total += balanceAfter - balanceBefore;
-            }
-            // Move ID from active to disputed list.
-            _disputedIds.push(id);
-            _state[id] = 2;
-            _removeActive(idx);
-        } catch {
-            // Revert (e.g. insufficient approvals for edge cases) — state unchanged.
-        }
-    }
-
-    // ── resolveDispute ───────────────────────────────────────────────────────
-
-    /// @dev Admin resolves a dispute. All funds (escrow + bonds) leave contract.
-    function resolveDispute(uint256 idx, bool payeeWins) external {
-        if (_disputedIds.length == 0) return;
-        idx = bound(idx, 0, _disputedIds.length - 1);
-        bytes32 id = _disputedIds[idx];
-
-        uint96 amount = _amount[id];
-        RemitTypes.DisputeBond memory bond = escrow.getDisputeBond(id);
-
-        uint96 payerAmt = payeeWins ? 0 : amount;
-        uint96 payeeAmt = payeeWins ? amount : 0;
-
-        // Escrow amount + all bonds leave contract.
-        ghost_total -= amount;
-        ghost_total -= bond.filerBond + bond.respondentBond;
-
-        vm.prank(admin);
-        escrow.resolveDispute(id, payerAmt, payeeAmt, payeeWins);
-
-        _removeDisputed(idx);
-    }
-
-    // ── claimDefaultWin ──────────────────────────────────────────────────────
-
-    /// @dev Filer claims default win after respondent didn't post counter-bond.
-    function claimDefaultWin(uint256 idx) external {
-        if (_disputedIds.length == 0) return;
-        idx = bound(idx, 0, _disputedIds.length - 1);
-        bytes32 id = _disputedIds[idx];
-
-        RemitTypes.DisputeBond memory bond = escrow.getDisputeBond(id);
-        if (bond.respondentPosted) return; // Respondent posted — can't claim default win
-
-        // Warp past the counter-bond deadline.
-        vm.warp(bond.counterBondDeadline + 1);
-
-        // Escrow amount + filer's bond leave contract.
-        ghost_total -= _amount[id];
-        ghost_total -= bond.filerBond;
-
-        vm.prank(bond.filer);
-        escrow.claimDefaultWin(id);
-
-        _removeDisputed(idx);
-    }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     function activeCount() external view returns (uint256) {
         return _activeIds.length;
-    }
-
-    function disputedCount() external view returns (uint256) {
-        return _disputedIds.length;
     }
 
     function _removeActive(uint256 idx) internal {
@@ -296,11 +212,6 @@ contract EscrowHandler is Test {
         _activeIds.pop();
     }
 
-    function _removeDisputed(uint256 idx) internal {
-        uint256 last = _disputedIds.length - 1;
-        if (idx != last) _disputedIds[idx] = _disputedIds[last];
-        _disputedIds.pop();
-    }
 }
 
 // =============================================================================
