@@ -74,6 +74,7 @@ library RemitTypes {
         EscrowStatus status;
         bool claimStarted;
         bool evidenceSubmitted;
+        uint96 milestoneReleased; // cumulative raw milestone amounts paid out (including fees)
         bytes32 evidenceHash;
         uint8 milestoneCount;
         uint8 splitCount;
