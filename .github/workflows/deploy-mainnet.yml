@@ -7,6 +7,13 @@ concurrency:
 on:
   workflow_dispatch:
     inputs:
+      script:
+        description: "Forge script to run"
+        required: true
+        type: choice
+        options:
+          - DeployMainnet.s.sol
+          - RedeployBountyMainnet.s.sol
       dry_run:
         description: "Simulate only (no broadcast)"
         required: false
@@ -47,7 +54,7 @@ jobs:
             # --verifier blockscout: free, no API key required. Basescan requires $49/mo paid plan for Base mainnet.
             FLAGS="$FLAGS --broadcast --slow --verify --verifier blockscout --verifier-url https://base.blockscout.com/api"
           fi
-          forge script script/DeployMainnet.s.sol $FLAGS
+          forge script script/${{ inputs.script }} $FLAGS
 
       - name: Upload broadcast artifacts
         uses: actions/upload-artifact@v4
