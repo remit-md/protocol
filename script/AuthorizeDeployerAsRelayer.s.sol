@@ -21,12 +21,12 @@ import {RemitDeposit} from "../src/RemitDeposit.sol";
 ///        --rpc-url $ALCHEMY_BASE_SEPOLIA_URL \
 ///        --private-key $DEPLOYER_PRIVATE_KEY
 contract AuthorizeDeployerAsRelayer is Script {
-    address constant ROUTER = 0x3120f396Ff6a9AfC5a9D92E28796082f1429E024;
+    address constant ROUTER = 0x3120F396fF6A9aFc5a9D92e28796082F1429e024;
     address constant ESCROW = 0x47De7cDD757e3765d36C083dAb59B2c5A9d249f2;
     address constant TAB = 0x9415f510D8C6199e0f66Bde927D7d88dE391f5E8;
     address constant STREAM = 0x20d413e0eaC0f5da3c8630667FD16A94fCd7231A;
-    address constant BOUNTY = 0xB3868471C3034280cCe3a56Dd37c6154c3Bb0b32;
-    address constant DEPOSIT = 0x7E0aE37df62E93C1C16A5661A7998BD174331554;
+    address constant BOUNTY = 0xB3868471c3034280ccE3a56DD37C6154c3Bb0B32;
+    address constant DEPOSIT = 0x7E0ae37DF62E93c1c16A5661a7998bd174331554;
 
     function run() external {
         address deployer = msg.sender;
