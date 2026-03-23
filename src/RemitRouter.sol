@@ -268,6 +268,9 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
         if (from == recipient) revert RemitErrors.SelfPayment(from);
         if (amount == 0) revert RemitErrors.ZeroAmount();
         if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
+        // V2: Validate session key delegation (no-op if keyRegistry not set or `from` is a master key).
+        // `from` is the payer authenticated via EIP-3009 signature, not msg.sender (relayer).
+        RemitKeyValidator._validateAndRecord(keyRegistry, from, amount, RemitTypes.PaymentType.PAY_PER_REQUEST);
 
         // Calculate fee before any transfers (Checks-Effects-Interactions: checks first).
         uint96 fee = IRemitFeeCalculator(feeCalculator).calculateFee(from, amount);
