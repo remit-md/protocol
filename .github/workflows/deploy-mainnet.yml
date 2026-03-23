@@ -54,7 +54,7 @@ jobs:
             # --verifier blockscout: free, no API key required. Basescan requires $49/mo paid plan for Base mainnet.
             FLAGS="$FLAGS --broadcast --slow --verify --verifier blockscout --verifier-url https://base.blockscout.com/api"
           fi
-          forge script script/${{ inputs.script }} $FLAGS
+          forge script script/${{ inputs.script }} --private-key "$FOUNDRY_PRIVATE_KEY" $FLAGS
 
       - name: Upload broadcast artifacts
         uses: actions/upload-artifact@v4
