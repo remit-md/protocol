@@ -13,8 +13,6 @@ import {RemitTypes} from "../../src/libraries/RemitTypes.sol";
 //   fund → claimStart → release
 //   fund → cancel (before claimStart)
 //   fund → claimStart → timeout (payer reclaims)
-//   fund → fileDispute (payer) → claimDefaultWin (after deadline)
-//   fund → claimStart → fileDispute (payee) → claimDefaultWin (after deadline)
 //
 // Invariants under test (from INVARIANTS.md):
 //   INV-E1: usdc.balanceOf(escrow) == ghost_escrowBalance at ALL times
@@ -45,24 +43,22 @@ contract EscrowStateful {
 
     // ── Ghost accounting ─────────────────────────────────────────────────────
 
-    // All USDC deposited into the escrow contract (amounts + dispute bonds)
+    // All USDC deposited into the escrow contract (amounts)
     uint256 internal ghost_totalIn;
-    // All USDC withdrawn from the escrow contract (releases, refunds, bond returns)
+    // All USDC withdrawn from the escrow contract (releases, refunds)
     uint256 internal ghost_totalOut;
     // Computed balance = ghost_totalIn - ghost_totalOut; must equal usdc.balanceOf(escrow)
     uint256 internal ghost_escrowBalance;
     // Total fees collected (for INV-E6 upper bound check)
     uint256 internal ghost_feesCollected;
-    // Total escrow amounts funded (excludes bonds — for fee rate check denominator)
+    // Total escrow amounts funded (for fee rate check denominator)
     uint256 internal ghost_totalFunded;
 
     // ── Escrow tracking ──────────────────────────────────────────────────────
 
-    bytes32[] internal _activeIds; // non-terminal IDs (Funded, Active, or Disputed)
+    bytes32[] internal _activeIds; // non-terminal IDs (Funded or Active)
     mapping(bytes32 => uint96) internal _amount;
-    mapping(bytes32 => uint96) internal _bondAmount; // bond posted on fileDispute
-    mapping(bytes32 => bool) internal _filerIsPayer; // who filed the dispute
-    // 0=Funded, 1=Active, 3=Disputed, 2=terminal
+    // 0=Funded, 1=Active, 2=terminal
     mapping(bytes32 => uint8) internal _state;
 
     uint256 internal _idCounter;
@@ -76,11 +72,11 @@ contract EscrowStateful {
     constructor() {
         usdc = new MockUSDC();
         feeCalc = new MockFeeCalculator();
-        escrow = new RemitEscrow(address(usdc), address(feeCalc), ADMIN, FEE_WALLET, address(0), address(0));
+        escrow = new RemitEscrow(address(usdc), address(feeCalc), ADMIN, FEE_WALLET, address(0));
 
         _currentTime = uint64(block.timestamp);
 
-        // Pre-fund both parties (bonds up to 5% of $1k + min bond)
+        // Pre-fund both parties
         usdc.mint(PAYER, 100_000_000e6);
         usdc.mint(PAYEE, 10_000_000e6);
 
@@ -103,10 +99,6 @@ contract EscrowStateful {
         if (v > hi) return hi;
         return v;
     }
-
-    // NOTE: The actual bond also includes a dispute-rate multiplier (1x/2x/4x/8x) tracked
-    // on-chain in RemitEscrow._getDisputeMultiplier(). We don't replicate that logic here;
-    // instead we measure the actual balance diff after fileDispute succeeds.
 
     function _removeActive(uint256 idx) internal {
         uint256 last = _activeIds.length - 1;
@@ -208,80 +200,6 @@ contract EscrowStateful {
         } catch {}
     }
 
-    /// @notice Payer files dispute (Funded/Active -> Disputed).
-    /// Bond = max(amount*5%, $0.50) * disputeRateMultiplier. Read actual amount via balance diff.
-    function action_fileDisputeAsPayer(uint256 idxSeed) external {
-        uint256 len = _activeIds.length;
-        if (len == 0) return;
-        bytes32 id = _activeIds[idxSeed % len];
-        if (_state[id] != 0 && _state[id] != 1) return;
-
-        bytes32 evidence = keccak256(abi.encode("evidence-payer", id));
-        uint256 payerBefore = usdc.balanceOf(PAYER);
-
-        hevm.prank(PAYER);
-        try escrow.fileDispute(id, evidence) {
-            uint96 actualBond = uint96(payerBefore - usdc.balanceOf(PAYER)); // incl. multiplier
-
-            ghost_totalIn += actualBond;
-            ghost_escrowBalance += actualBond;
-            _bondAmount[id] = actualBond;
-            _filerIsPayer[id] = true;
-            _state[id] = 3; // Disputed
-        } catch {}
-    }
-
-    /// @notice Payee files dispute (Funded/Active -> Disputed).
-    function action_fileDisputeAsPayee(uint256 idxSeed) external {
-        uint256 len = _activeIds.length;
-        if (len == 0) return;
-        bytes32 id = _activeIds[idxSeed % len];
-        if (_state[id] != 0 && _state[id] != 1) return;
-
-        bytes32 evidence = keccak256(abi.encode("evidence-payee", id));
-        uint256 payeeBefore = usdc.balanceOf(PAYEE);
-
-        hevm.prank(PAYEE);
-        try escrow.fileDispute(id, evidence) {
-            uint96 actualBond = uint96(payeeBefore - usdc.balanceOf(PAYEE));
-
-            ghost_totalIn += actualBond;
-            ghost_escrowBalance += actualBond;
-            _bondAmount[id] = actualBond;
-            _filerIsPayer[id] = false;
-            _state[id] = 3; // Disputed
-        } catch {}
-    }
-
-    /// @notice Filer claims default win (respondent missed counter-bond deadline).
-    function action_claimDefaultWin(uint256 idxSeed) external {
-        uint256 len = _activeIds.length;
-        if (len == 0) return;
-        bytes32 id = _activeIds[idxSeed % len];
-        if (_state[id] != 3) return;
-
-        uint96 amount = _amount[id];
-        uint96 fee = uint96((uint256(amount) * RemitTypes.FEE_RATE_BPS) / 10_000);
-        uint96 bond = _bondAmount[id];
-        bool filerIsPayer = _filerIsPayer[id];
-        address filer = filerIsPayer ? PAYER : PAYEE;
-
-        hevm.prank(filer);
-        try escrow.claimDefaultWin(id) {
-            // escrow releases: amount + bond (bond returned to filer, amount to winner)
-            uint256 totalExit = uint256(amount) + bond;
-            ghost_totalOut += totalExit; // both escrow amount and bond exit
-            ghost_escrowBalance -= totalExit;
-
-            if (!filerIsPayer) {
-                ghost_feesCollected += fee; // payee wins: fee collected
-            }
-
-            _state[id] = 2;
-            _removeActive(_findIdx(id));
-        } catch {}
-    }
-
     /// @notice Advance block time (enables timeout and default-win scenarios).
     function action_warpTime(uint64 delta) external {
         delta = _clamp64(delta, 0, 60 days);
@@ -294,7 +212,7 @@ contract EscrowStateful {
         uint256 len = _activeIds.length;
         if (len == 0) return;
         bytes32 id = _activeIds[idxSeed % len];
-        if (_state[id] == 2 || _state[id] == 3) return; // skip terminal or disputed
+        if (_state[id] == 2) return; // skip terminal
 
         uint96 amount = _amount[id];
         uint256 payerBefore = usdc.balanceOf(PAYER);
@@ -324,7 +242,6 @@ contract EscrowStateful {
     }
 
     /// @notice Total conservation: all USDC in == all USDC (in-escrow + out).
-    /// Covers both escrow amounts AND dispute bonds.
     function property_totalConservation() external view returns (bool) {
         return ghost_totalIn == ghost_escrowBalance + ghost_totalOut;
     }

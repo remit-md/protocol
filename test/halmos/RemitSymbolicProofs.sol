@@ -44,7 +44,7 @@ contract RemitSymbolicProofs is Test {
     function setUp() public {
         usdc = new MockUSDC();
         feeCalc = new MockFeeCalculator();
-        escrow = new RemitEscrow(address(usdc), address(feeCalc), ADMIN, FEE_RECIPIENT, address(0), address(0));
+        escrow = new RemitEscrow(address(usdc), address(feeCalc), ADMIN, FEE_RECIPIENT, address(0));
         tab = new RemitTab(address(usdc), address(feeCalc), FEE_RECIPIENT, ADMIN, address(0));
     }
 

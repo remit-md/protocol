@@ -6,7 +6,6 @@ import {Test} from "forge-std/Test.sol";
 import {MockUSDC} from "../src/test/MockUSDC.sol";
 import {RemitFeeCalculator} from "../src/RemitFeeCalculator.sol";
 import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
-import {RemitArbitration} from "../src/RemitArbitration.sol";
 import {RemitEscrow} from "../src/RemitEscrow.sol";
 import {RemitTab} from "../src/RemitTab.sol";
 import {RemitStream} from "../src/RemitStream.sol";
@@ -20,12 +19,11 @@ import {RemitTypes} from "../src/libraries/RemitTypes.sol";
 /// @notice Simulates DeployLocal.s.sol in a Foundry test environment.
 ///
 ///         Verifies that:
-///         1. All 10 contracts deploy without revert.
+///         1. All 9 contracts deploy without revert.
 ///         2. Router is wired to the correct contract addresses.
 ///         3. FeeCalculator authorizes the 4 fee-bearing contracts.
 ///         4. KeyRegistry authorizes all 5 fund-holding contracts.
-///         5. Arbitration authorizes Escrow.
-///         6. USDC minting works (sanity check for MockUSDC).
+///         5. USDC minting works (sanity check for MockUSDC).
 ///
 ///         This test is the CI equivalent of running:
 ///         forge script script/DeployLocal.s.sol --broadcast --rpc-url http://localhost:8545
@@ -36,7 +34,6 @@ contract DeployLocalTest is Test {
     MockUSDC internal usdc;
     RemitFeeCalculator internal feeCalc;
     RemitKeyRegistry internal keyRegistry;
-    RemitArbitration internal arbitration;
     RemitEscrow internal escrow;
     RemitTab internal tab;
     RemitStream internal stream;
@@ -58,35 +55,27 @@ contract DeployLocalTest is Test {
         // 3. KeyRegistry
         keyRegistry = new RemitKeyRegistry(deployer);
 
-        // 4. Arbitration
-        arbitration = new RemitArbitration(address(usdc), deployer);
-
-        // 5. Fund-holding contracts
-        escrow = new RemitEscrow(
-            address(usdc), address(feeCalc), deployer, deployer, address(keyRegistry), address(arbitration)
-        );
+        // 4. Fund-holding contracts
+        escrow = new RemitEscrow(address(usdc), address(feeCalc), deployer, deployer, address(keyRegistry));
         tab = new RemitTab(address(usdc), address(feeCalc), deployer, deployer, address(keyRegistry));
         stream = new RemitStream(address(usdc), address(feeCalc), deployer, deployer, address(keyRegistry));
         bounty = new RemitBounty(address(usdc), address(feeCalc), deployer, deployer, address(keyRegistry));
         deposit = new RemitDeposit(address(usdc), address(keyRegistry), deployer);
 
-        // 6. Authorize fund-holding contracts in FeeCalculator
+        // 5. Authorize fund-holding contracts in FeeCalculator
         feeCalc.authorizeCaller(address(escrow));
         feeCalc.authorizeCaller(address(tab));
         feeCalc.authorizeCaller(address(stream));
         feeCalc.authorizeCaller(address(bounty));
 
-        // 7. Authorize all contracts in KeyRegistry
+        // 6. Authorize all contracts in KeyRegistry
         keyRegistry.authorizeContract(address(escrow));
         keyRegistry.authorizeContract(address(tab));
         keyRegistry.authorizeContract(address(stream));
         keyRegistry.authorizeContract(address(bounty));
         keyRegistry.authorizeContract(address(deposit));
 
-        // 8. Authorize Escrow in Arbitration
-        arbitration.authorizeEscrow(address(escrow));
-
-        // 9. Router (UUPS proxy)
+        // 7. Router (UUPS proxy)
         RemitRouter routerImpl = new RemitRouter();
         bytes memory routerInit = abi.encodeCall(
             routerImpl.initialize,
@@ -100,7 +89,7 @@ contract DeployLocalTest is Test {
         );
         router = RemitRouter(address(new ERC1967Proxy(address(routerImpl), routerInit)));
 
-        // 10. Wire router
+        // 8. Wire router
         router.setEscrow(address(escrow));
         router.setTab(address(tab));
         router.setStream(address(stream));
@@ -108,7 +97,7 @@ contract DeployLocalTest is Test {
         router.setDeposit(address(deposit));
         feeCalc.authorizeCaller(address(router));
 
-        // 11. Mint test tokens
+        // 9. Mint test tokens
         usdc.mint(deployer, 1_000_000e6);
 
         vm.stopPrank();
@@ -122,7 +111,6 @@ contract DeployLocalTest is Test {
         assertTrue(address(usdc) != address(0), "usdc not deployed");
         assertTrue(address(feeCalc) != address(0), "feeCalc not deployed");
         assertTrue(address(keyRegistry) != address(0), "keyRegistry not deployed");
-        assertTrue(address(arbitration) != address(0), "arbitration not deployed");
         assertTrue(address(escrow) != address(0), "escrow not deployed");
         assertTrue(address(tab) != address(0), "tab not deployed");
         assertTrue(address(stream) != address(0), "stream not deployed");
@@ -185,14 +173,6 @@ contract DeployLocalTest is Test {
         assertTrue(keyRegistry.isAuthorizedContract(address(stream)), "stream not auth");
         assertTrue(keyRegistry.isAuthorizedContract(address(bounty)), "bounty not auth");
         assertTrue(keyRegistry.isAuthorizedContract(address(deposit)), "deposit not auth");
-    }
-
-    // =========================================================================
-    // Arbitration authorization
-    // =========================================================================
-
-    function test_deploy_arbitration_authorizedEscrow() public view {
-        assertTrue(arbitration.isAuthorizedEscrow(address(escrow)), "escrow not authorized in arbitration");
     }
 
     // =========================================================================

@@ -12,7 +12,6 @@ import {RemitStream} from "../src/RemitStream.sol";
 import {RemitBounty} from "../src/RemitBounty.sol";
 import {RemitDeposit} from "../src/RemitDeposit.sol";
 import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
-import {RemitArbitration} from "../src/RemitArbitration.sol";
 
 /// @title DeployMainnet
 /// @notice Mainnet deployment script. Uses real USDC (no MockUSDC).
@@ -21,7 +20,7 @@ import {RemitArbitration} from "../src/RemitArbitration.sol";
 ///         Gnosis Safe multi-sig before going live (highly recommended).
 ///
 ///         Ownership model: deployer is the initial owner of all ownable contracts
-///         (FeeCalculator, KeyRegistry, Arbitration, Router) so it can configure
+///         (FeeCalculator, KeyRegistry, Router) so it can configure
 ///         authorizations and wiring. Ownership is transferred to GNOSIS_SAFE at
 ///         the end. Fund-holding contracts (Escrow, Tab, Stream, Bounty, Deposit)
 ///         have immutable protocolAdmin set to GNOSIS_SAFE from the start.
@@ -53,7 +52,6 @@ contract DeployMainnet is Script {
 
     address internal _feeCalcProxy;
     address internal _keyRegistry;
-    address internal _arbitration;
     address internal _routerProxy;
     address internal _escrow;
     address internal _tab;
@@ -82,7 +80,6 @@ contract DeployMainnet is Script {
         // The deployer needs onlyOwner access to configure authorizations.
         _deployFeeCalculator(deployer);
         _deployKeyRegistry(deployer);
-        _deployArbitration(deployer);
 
         // Step 2: Deploy fund-holding contracts with admin (Safe) as protocolAdmin.
         // protocolAdmin is immutable — must be the Safe from the start.
@@ -91,7 +88,6 @@ contract DeployMainnet is Script {
         // Step 3: Configure authorizations (requires deployer = owner).
         _authorizeFundHolding();
         _authorizeKeyRegistry();
-        _authorizeArbitration();
 
         // Step 4: Deploy Router with deployer as owner (for wiring),
         // but admin as protocolAdmin and feeRecipient.
@@ -120,15 +116,8 @@ contract DeployMainnet is Script {
         console2.log("KeyRegistry:          ", _keyRegistry);
     }
 
-    function _deployArbitration(address owner) internal {
-        _arbitration = address(new RemitArbitration(MAINNET_USDC, owner));
-        console2.log("Arbitration:          ", _arbitration);
-    }
-
     function _deployFundHolding(address protocolAdmin, address feeRecipient) internal {
-        _escrow = address(
-            new RemitEscrow(MAINNET_USDC, _feeCalcProxy, protocolAdmin, feeRecipient, _keyRegistry, _arbitration)
-        );
+        _escrow = address(new RemitEscrow(MAINNET_USDC, _feeCalcProxy, protocolAdmin, feeRecipient, _keyRegistry));
         _tab = address(new RemitTab(MAINNET_USDC, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         _stream = address(new RemitStream(MAINNET_USDC, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         _bounty = address(new RemitBounty(MAINNET_USDC, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
@@ -147,10 +136,6 @@ contract DeployMainnet is Script {
         kr.authorizeContract(_stream);
         kr.authorizeContract(_bounty);
         kr.authorizeContract(_deposit);
-    }
-
-    function _authorizeArbitration() internal {
-        RemitArbitration(_arbitration).authorizeEscrow(_escrow);
     }
 
     function _authorizeFundHolding() internal {
@@ -190,7 +175,6 @@ contract DeployMainnet is Script {
     function _transferOwnership(address newOwner) internal {
         RemitFeeCalculator(_feeCalcProxy).transferOwnership(newOwner);
         RemitKeyRegistry(_keyRegistry).transferOwnership(newOwner);
-        RemitArbitration(_arbitration).transferOwnership(newOwner);
         RemitRouter(_routerProxy).transferOwnership(newOwner);
         console2.log("");
         console2.log("Ownership transferred to:", newOwner);
@@ -207,7 +191,6 @@ contract DeployMainnet is Script {
         console2.log("");
         console2.log("=== Contract Addresses ===");
         console2.log("KeyRegistry:   ", _keyRegistry);
-        console2.log("Arbitration:   ", _arbitration);
         console2.log("FeeCalc:       ", _feeCalcProxy);
         console2.log("Router:        ", _routerProxy);
         console2.log("Escrow:        ", _escrow);

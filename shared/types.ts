@@ -14,7 +14,6 @@ export enum EscrowStatus {
   FUNDED = "funded",
   ACTIVE = "active",          // after CLAIM_START
   COMPLETED = "completed",    // released
-  DISPUTED = "disputed",      // frozen
   CANCELLED = "cancelled",    // mutual or unilateral
   TIMED_OUT = "timed_out",   // timeout expired
 }
@@ -24,7 +23,6 @@ export enum MilestoneStatus {
   FUNDED = "funded",
   SUBMITTED = "submitted",
   RELEASED = "released",
-  DISPUTED = "disputed",
 }
 
 export enum TabStatus {
@@ -58,23 +56,6 @@ export enum DepositStatus {
   RETURNED = "returned",
   FORFEITED = "forfeited",
   EXPIRED = "expired",
-}
-
-export enum DisputeStatus {
-  FILED = "filed",
-  RESPONDED = "responded",
-  ESCALATED = "escalated",
-  RESOLVED = "resolved",
-}
-
-export enum DisputeReason {
-  INCOMPLETE_DELIVERY = "INCOMPLETE_DELIVERY",
-  WRONG_DELIVERABLE = "WRONG_DELIVERABLE",
-  QUALITY_BELOW_SPEC = "QUALITY_BELOW_SPEC",
-  NO_DELIVERY = "NO_DELIVERY",
-  PAYMENT_NOT_RELEASED = "PAYMENT_NOT_RELEASED",
-  TIMEOUT_UNFAIR = "TIMEOUT_UNFAIR",
-  OVERCHARGE = "OVERCHARGE",
 }
 
 export enum WalletTier {

@@ -32,9 +32,6 @@ library RemitErrors {
     // Deposit
     error DepositNotFound(bytes32 depositId);
 
-    // Dispute
-    error DisputeAlreadyFiled(bytes32 invoiceId);
-
     // Milestone
     error MilestoneEscrowBlocked(bytes32 invoiceId);
 
@@ -59,18 +56,4 @@ library RemitErrors {
 
     // V2: Bounty
     error BountyRejectionNoReason(bytes32 bountyId);
-
-    // V2: Arbitration
-    error ArbitratorNotFound(address wallet);
-    error ArbitratorAlreadyRegistered(address wallet);
-    error ArbitrationCaseNotFound(bytes32 invoiceId);
-    error ArbitrationCaseAlreadyExists(bytes32 invoiceId);
-    error StrikeAlreadyCast(bytes32 invoiceId);
-    error InvalidPercentageSum(uint8 payerPercent, uint8 payeePercent);
-    error ArbitrationDeadlinePassed(bytes32 invoiceId);
-    error EscalationNotReady(uint64 deadline);
-    error NotArbitrationContract(address caller);
-    error ArbitrationCooldownNotMet(uint64 releaseAt);
-    error ArbitratorNotAssigned(bytes32 invoiceId, address caller);
-    error ArbitrationAlreadyDecided(bytes32 invoiceId);
 }

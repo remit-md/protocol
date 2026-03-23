@@ -13,7 +13,6 @@ import {RemitTypes} from "../../src/libraries/RemitTypes.sol";
 //   openTab → closeTab (with charges)
 //   openTab → closeTab (zero charges — full refund)
 //   openTab → closeExpiredTab (after expiry, no sig needed for zero charges)
-//   openTab → filePartialDispute → resolvePartialDispute
 //
 // Invariants under test (from INVARIANTS.md):
 //   INV-T1: usdc.balanceOf(tab) == ghost_tabBalance at ALL times
@@ -58,7 +57,7 @@ contract TabStateful {
 
     // All USDC locked into the tab contract (limits)
     uint256 internal ghost_totalIn;
-    // All USDC released from the tab contract (payouts + refunds + dispute resolutions)
+    // All USDC released from the tab contract (payouts + refunds)
     uint256 internal ghost_totalOut;
     // Net balance: ghost_totalIn - ghost_totalOut; must equal usdc.balanceOf(tab)
     uint256 internal ghost_tabBalance;
@@ -70,12 +69,10 @@ contract TabStateful {
     // ── Tab tracking ──────────────────────────────────────────────────────────
 
     bytes32[] internal _openTabIds;
-    bytes32[] internal _disputedTabIds;
 
     mapping(bytes32 => uint96) internal _limit;
-    mapping(bytes32 => uint96) internal _disputedAmount; // frozen in PartiallyDisputed
     mapping(bytes32 => uint64) internal _expiry;
-    // 0=Open, 1=Closed, 2=PartiallyDisputed
+    // 0=Open, 1=Closed
     mapping(bytes32 => uint8) internal _state;
 
     uint256 internal _idCounter;
@@ -111,7 +108,7 @@ contract TabStateful {
         return v;
     }
 
-    /// @dev Sign a TabCharge struct as the provider. Used by action_closeTab and filePartialDispute.
+    /// @dev Sign a TabCharge struct as the provider. Used by action_closeTab.
     function _signTabCharge(bytes32 tabId, uint96 totalCharged, uint32 callCount) internal returns (bytes memory) {
         bytes32 structHash = keccak256(abi.encode(TAB_CHARGE_TYPEHASH, tabId, totalCharged, callCount));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", tab.domainSeparator(), structHash));
@@ -125,22 +122,9 @@ contract TabStateful {
         _openTabIds.pop();
     }
 
-    function _removeDisputed(uint256 idx) internal {
-        uint256 last = _disputedTabIds.length - 1;
-        if (idx != last) _disputedTabIds[idx] = _disputedTabIds[last];
-        _disputedTabIds.pop();
-    }
-
     function _findOpenIdx(bytes32 id) internal view returns (uint256) {
         for (uint256 i = 0; i < _openTabIds.length; i++) {
             if (_openTabIds[i] == id) return i;
-        }
-        return type(uint256).max;
-    }
-
-    function _findDisputedIdx(bytes32 id) internal view returns (uint256) {
-        for (uint256 i = 0; i < _disputedTabIds.length; i++) {
-            if (_disputedTabIds[i] == id) return i;
         }
         return type(uint256).max;
     }
@@ -224,87 +208,6 @@ contract TabStateful {
             ghost_tabBalance -= limit;
             _state[id] = 1;
             _removeOpen(_findOpenIdx(id));
-        } catch {}
-    }
-
-    /// @notice Payer disputes charges above degradationTimestamp (Open → PartiallyDisputed).
-    ///         Requires two provider-signed states: pre-degradation (undisputed) and total.
-    ///         Undisputed portion settles immediately; disputed portion is frozen.
-    function action_filePartialDispute(
-        uint256 idxSeed,
-        uint96 totalSeed,
-        uint96 undisputedSeed,
-        uint32 undispCC,
-        uint32 totalCC
-    ) external {
-        uint256 len = _openTabIds.length;
-        if (len == 0) return;
-        bytes32 id = _openTabIds[idxSeed % len];
-        if (_state[id] != 0) return;
-        if (_currentTime < 2) return;
-
-        uint96 limit = _limit[id];
-        if (limit < RemitTypes.MIN_AMOUNT * 2) return;
-
-        uint96 totalCharged = _clamp(totalSeed, RemitTypes.MIN_AMOUNT * 2, limit);
-        uint96 undisputedAmount = _clamp(undisputedSeed, 0, totalCharged - RemitTypes.MIN_AMOUNT);
-
-        // Extracted to helper to avoid stack-too-deep (8-arg external call + locals)
-        _execPartialDispute(id, limit, totalCharged, undisputedAmount, undispCC, totalCC);
-    }
-
-    /// @dev Executes the filePartialDispute call and updates ghost accounting.
-    ///      Split from action_filePartialDispute to stay under Solidity stack limit.
-    function _execPartialDispute(
-        bytes32 id,
-        uint96 limit,
-        uint96 totalCharged,
-        uint96 undisputedAmount,
-        uint32 undispCC,
-        uint32 totalCC
-    ) internal {
-        bytes memory undisputedSig_ = _signTabCharge(id, undisputedAmount, undispCC);
-        bytes memory totalSig_ = _signTabCharge(id, totalCharged, totalCC);
-        uint256 tabBefore = usdc.balanceOf(address(tab));
-
-        hevm.prank(PAYER);
-        try tab.filePartialDispute(
-            id, _currentTime - 1, undisputedAmount, undispCC, undisputedSig_, totalCharged, totalCC, totalSig_
-        ) {
-            uint96 disputedAmount = totalCharged - undisputedAmount;
-            uint256 exited = tabBefore - usdc.balanceOf(address(tab));
-
-            assert(exited + disputedAmount == limit);
-
-            uint96 undisputedFee =
-                undisputedAmount > 0 ? uint96((uint256(undisputedAmount) * RemitTypes.FEE_RATE_BPS) / 10_000) : 0;
-
-            ghost_totalOut += exited;
-            ghost_tabBalance -= exited;
-            ghost_feesCollected += undisputedFee;
-            _disputedAmount[id] = disputedAmount;
-            _state[id] = 2;
-            _disputedTabIds.push(id);
-            _removeOpen(_findOpenIdx(id));
-        } catch {}
-    }
-
-    /// @notice Admin resolves a PartiallyDisputed tab by splitting the frozen amount.
-    function action_resolvePartialDispute(uint256 idxSeed, uint96 providerSeed) external {
-        uint256 len = _disputedTabIds.length;
-        if (len == 0) return;
-        bytes32 id = _disputedTabIds[idxSeed % len];
-
-        uint96 disputed = _disputedAmount[id];
-        uint96 providerAmt = _clamp(providerSeed, 0, disputed);
-        uint96 payerAmt = disputed - providerAmt;
-
-        hevm.prank(ADMIN);
-        try tab.resolvePartialDispute(id, providerAmt, payerAmt) {
-            ghost_totalOut += disputed;
-            ghost_tabBalance -= disputed;
-            _state[id] = 1;
-            _removeDisputed(_findDisputedIdx(id));
         } catch {}
     }
 

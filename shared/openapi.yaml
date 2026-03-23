@@ -83,7 +83,7 @@ components:
         amount:       { type: number }
         evidence_uri: { type: string }
         timeout:      { type: integer, description: seconds }
-        status:       { type: string, enum: [pending, submitted, released, disputed] }
+        status:       { type: string, enum: [pending, submitted, released] }
 
     Split:
       type: object
@@ -100,7 +100,7 @@ components:
         invoice_id:    { type: string }
         chain:         { type: string }
         tx_hash:       { type: string }
-        status:        { type: string, enum: [funded, active, completed, disputed, cancelled, timed_out] }
+        status:        { type: string, enum: [funded, active, completed, cancelled, timed_out] }
         payer:         { $ref: "#/components/schemas/Address" }
         payee:         { $ref: "#/components/schemas/Address" }
         amount:        { $ref: "#/components/schemas/UsdcAmount" }
@@ -172,7 +172,6 @@ components:
         wallet:                 { $ref: "#/components/schemas/Address" }
         transactions_completed: { type: integer }
         total_volume:           { $ref: "#/components/schemas/UsdcAmount" }
-        dispute_rate:           { type: number }
         avg_completion_time:    { type: number, description: seconds }
         avg_rating:             { type: number }
         tier:                   { type: string }
@@ -590,33 +589,6 @@ paths:
       responses:
         "200": { description: Sent }
         "402": { description: Insufficient balance }
-
-  /disputes:
-    post:
-      summary: File dispute
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [invoice_id, reason, details]
-              properties:
-                invoice_id:   { type: string }
-                reason:       { type: string, enum: [INCOMPLETE_DELIVERY, WRONG_DELIVERABLE, QUALITY_BELOW_SPEC, NO_DELIVERY, PAYMENT_NOT_RELEASED, TIMEOUT_UNFAIR, OVERCHARGE] }
-                details:      { type: string }
-                evidence_uri: { type: string }
-      responses:
-        "201": { description: Filed }
-        "409": { description: Already filed }
-        "410": { description: Window closed }
-
-  /disputes/{id}:
-    get:
-      summary: Get dispute
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses:
-        "200": { description: Dispute }
 
   /webhooks:
     post:

@@ -22,7 +22,7 @@ interface IRemitDeposit {
 
     /// @notice Provider forfeits deposit (keeps funds)
     /// @param depositId The deposit ID
-    /// @dev Only provider. Triggers dispute automatically. Emits DepositForfeited.
+    /// @dev Only provider. Emits DepositForfeited.
     function forfeitDeposit(bytes32 depositId) external;
 
     /// @notice Depositor reclaims after expiry

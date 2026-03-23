@@ -12,7 +12,6 @@ import {RemitStream} from "../src/RemitStream.sol";
 import {RemitBounty} from "../src/RemitBounty.sol";
 import {RemitDeposit} from "../src/RemitDeposit.sol";
 import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
-import {RemitArbitration} from "../src/RemitArbitration.sol";
 
 /// @title Deploy
 /// @notice Production deployment script for all Remit protocol contracts.
@@ -20,7 +19,7 @@ import {RemitArbitration} from "../src/RemitArbitration.sol";
 ///      forge script script/Deploy.s.sol --broadcast --rpc-url $RPC_URL
 ///
 ///      Required env vars:
-///        PROTOCOL_ADMIN   — address that resolves disputes and approves upgrades
+///        PROTOCOL_ADMIN   — address that approves upgrades
 ///        FEE_RECIPIENT    — address that receives protocol fees
 ///        USDC_ADDRESS     — USDC token address on target chain
 ///
@@ -30,7 +29,6 @@ contract Deploy is Script {
     // Deployed addresses (set during run, logged in summary)
     address internal _feeCalcProxy;
     address internal _keyRegistry;
-    address internal _arbitration;
     address internal _routerProxy;
     address internal _escrow;
     address internal _tab;
@@ -53,11 +51,9 @@ contract Deploy is Script {
         vm.startBroadcast();
         _deployFeeCalculator(deployer);
         _deployKeyRegistry(deployer);
-        _deployArbitration(deployer, usdcAddr);
         _deployFundHolding(usdcAddr, protocolAdmin, feeRecipient);
         _authorizeFundHolding();
         _authorizeKeyRegistry();
-        _authorizeArbitration();
         _deployRouter(deployer, usdcAddr, protocolAdmin, feeRecipient);
         _wireRouter();
         vm.stopBroadcast();
@@ -78,14 +74,8 @@ contract Deploy is Script {
         console2.log("RemitKeyRegistry:", _keyRegistry);
     }
 
-    function _deployArbitration(address owner, address usdcAddr) internal {
-        _arbitration = address(new RemitArbitration(usdcAddr, owner));
-        console2.log("RemitArbitration:", _arbitration);
-    }
-
     function _deployFundHolding(address usdcAddr, address protocolAdmin, address feeRecipient) internal {
-        _escrow =
-            address(new RemitEscrow(usdcAddr, _feeCalcProxy, protocolAdmin, feeRecipient, _keyRegistry, _arbitration));
+        _escrow = address(new RemitEscrow(usdcAddr, _feeCalcProxy, protocolAdmin, feeRecipient, _keyRegistry));
         console2.log("RemitEscrow:   ", _escrow);
 
         _tab = address(new RemitTab(usdcAddr, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
@@ -108,11 +98,6 @@ contract Deploy is Script {
         kr.authorizeContract(_stream);
         kr.authorizeContract(_bounty);
         kr.authorizeContract(_deposit);
-    }
-
-    function _authorizeArbitration() internal {
-        RemitArbitration arb = RemitArbitration(_arbitration);
-        arb.authorizeEscrow(_escrow);
     }
 
     function _authorizeFundHolding() internal {
@@ -156,7 +141,6 @@ contract Deploy is Script {
         console2.log("=== Deployment Complete ===");
         console2.log("FeeCalculator: ", _feeCalcProxy);
         console2.log("KeyRegistry:   ", _keyRegistry);
-        console2.log("Arbitration:   ", _arbitration);
         console2.log("Router:        ", _routerProxy);
         console2.log("Escrow:        ", _escrow);
         console2.log("Tab:           ", _tab);
