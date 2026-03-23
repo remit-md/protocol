@@ -619,12 +619,18 @@ contract RemitEscrowTest is TestBase {
     /// @dev CRITICAL: Conservation test — claimTimeoutPayee must subtract already-released milestones.
     /// Without the fix, payee would receive milestone payout + full timeout payout > escrowed amount.
     function test_claimTimeoutPayee_subtractsMilestoneReleased() public {
+        // Snapshot balances before escrow creation
+        uint256 payeeBefore = usdc.balanceOf(payee);
+        uint256 feeBefore = usdc.balanceOf(feeRecipient);
+
         // Create 100 USDC escrow with 3 milestones: 30 + 40 + 30
         uint96[] memory amounts = new uint96[](3);
         amounts[0] = 30e6;
         amounts[1] = 40e6;
         amounts[2] = 30e6;
         _createEscrowWithMilestones(INV, amounts);
+
+        uint256 contractAfterCreate = usdc.balanceOf(address(escrow));
 
         vm.prank(payee);
         escrow.claimStart(INV);
@@ -638,28 +644,28 @@ contract RemitEscrowTest is TestBase {
         // Track balances after milestone release
         uint256 payeeAfterMilestone = usdc.balanceOf(payee);
         uint256 feeAfterMilestone = usdc.balanceOf(feeRecipient);
-        uint256 contractAfterMilestone = usdc.balanceOf(address(escrow));
 
         // Verify milestoneReleased tracking
         RemitTypes.Escrow memory e = escrow.getEscrow(INV);
         assertEq(e.milestoneReleased, 30e6, "milestoneReleased should track raw milestone amount");
-        assertEq(contractAfterMilestone, 70e6, "contract should hold remaining 70 USDC");
+        // Contract lost 30e6 from the milestone release
+        assertEq(usdc.balanceOf(address(escrow)), contractAfterCreate - 30e6, "contract lost milestone amount");
 
         // Warp past timeout, payee claims remaining via timeout
         vm.warp(block.timestamp + TIMEOUT_DELTA + 1);
         vm.prank(payee);
         escrow.claimTimeoutPayee(INV);
 
-        // Verify conservation: total outflow must equal 100 USDC (original amount)
         uint256 payeeFinal = usdc.balanceOf(payee);
         uint256 feeFinal = usdc.balanceOf(feeRecipient);
-        uint256 contractFinal = usdc.balanceOf(address(escrow));
 
         // Contract should be fully drained for this escrow
-        assertEq(contractFinal, 0, "contract should be empty after full payout");
+        assertEq(usdc.balanceOf(address(escrow)), contractAfterCreate - 100e6, "contract drained by escrow amount");
 
-        // Total payee + total fees = original amount
-        assertEq(payeeFinal + feeFinal, 100e6, "conservation: payee + fees = original amount");
+        // Conservation via deltas: payee gained + fees gained = escrowed amount
+        uint256 payeeDelta = payeeFinal - payeeBefore;
+        uint256 feeDelta = feeFinal - feeBefore;
+        assertEq(payeeDelta + feeDelta, 100e6, "conservation: payee delta + fee delta = escrowed amount");
 
         // Verify the timeout payout is the REMAINING portion, not the full amount
         // 1% fee on 100e6 = 1e6 total fee
