@@ -24,12 +24,12 @@ import {RemitRouter} from "../src/RemitRouter.sol";
 ///        --private-key $DEPLOYER_PRIVATE_KEY
 contract RedeployEscrow is Script {
     // Infrastructure (do NOT redeploy)
-    address constant USDC = 0x142aD61B8d2edD6b3807D9266866D97C35Ee0317;
-    address constant FEE_CALC = 0x853CFc2387C184E4492892475adfc19A23FF2e4F;
-    address constant KEY_REGISTRY = 0x97ff63c9E24Fc074023F5d1251E544dCDaC93886;
-    address constant ARBITRATION = 0x3b2C97AafCdFBD5F6C9cF86dDa684Faa248008B1;
-    address constant ROUTER = 0xb3E96ebE54138d1c0caea00Ae098309C7E0138eC;
-    address constant FEE_WALLET = 0xd3f721BDF92a2bB5Dd8d2FE2AFC03aFE5629B420;
+    address constant USDC = 0x2D846325766921935f37d5b4478196d3EF93707C;
+    address constant FEE_CALC = 0xCCe1B8cEE59f860578Bed3C05FE2A80EEa04aAfB;
+    address constant KEY_REGISTRY = 0xF5Ba0BAA124885EB88aD225e81A60864d5E43074;
+    address constant ARBITRATION = 0x4b88C779C970314216b97CA94CB6D380Db57CE91;
+    address constant ROUTER = 0x3120F396fF6A9aFc5a9D92e28796082F1429e024;
+    address constant FEE_WALLET = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38;
 
     // Server relayer (same key that submits all on-chain txns)
     address constant RELAYER = 0x3267B8B2D4A43F7eEd02B11a1564Faf8C9617020;
