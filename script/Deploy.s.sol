@@ -12,6 +12,7 @@ import {RemitStream} from "../src/RemitStream.sol";
 import {RemitBounty} from "../src/RemitBounty.sol";
 import {RemitDeposit} from "../src/RemitDeposit.sol";
 import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
+
 /// @title Deploy
 /// @notice Production deployment script for all Remit protocol contracts.
 /// @dev Run with:
@@ -74,8 +75,7 @@ contract Deploy is Script {
     }
 
     function _deployFundHolding(address usdcAddr, address protocolAdmin, address feeRecipient) internal {
-        _escrow =
-            address(new RemitEscrow(usdcAddr, _feeCalcProxy, protocolAdmin, feeRecipient, _keyRegistry));
+        _escrow = address(new RemitEscrow(usdcAddr, _feeCalcProxy, protocolAdmin, feeRecipient, _keyRegistry));
         console2.log("RemitEscrow:   ", _escrow);
 
         _tab = address(new RemitTab(usdcAddr, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
