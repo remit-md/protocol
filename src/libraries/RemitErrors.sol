@@ -56,5 +56,4 @@ library RemitErrors {
 
     // V2: Bounty
     error BountyRejectionNoReason(bytes32 bountyId);
-
 }
