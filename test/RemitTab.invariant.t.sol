@@ -19,9 +19,6 @@ import {RemitTypes} from "../src/libraries/RemitTypes.sol";
 //
 // On openTab:         ghost_locked += limit
 // On closeTab:        ghost_locked -= limit  (all: providerPayout + fee + refund = limit)
-// On filePartialDisp: ghost_locked -= (refund + providerUndisputed + undisputedFee)
-//                     i.e. -= limit - disputedAmount
-// On resolvePartial:  ghost_locked -= disputedAmount
 // =============================================================================
 
 contract TabHandler is Test {
@@ -41,12 +38,9 @@ contract TabHandler is Test {
 
     // Open tabs
     bytes32[] internal _openIds;
-    // PartiallyDisputed tabs
-    bytes32[] internal _disputedIds;
 
     mapping(bytes32 => uint96) internal _limit;
     mapping(bytes32 => uint64) internal _expiry;
-    mapping(bytes32 => uint96) internal _disputedAmount; // frozen disputed portion
 
     uint256 internal _idCounter;
     uint32 internal _callCountSeed;
@@ -140,74 +134,12 @@ contract TabHandler is Test {
         _removeOpen(idx);
     }
 
-    // ── filePartialDispute ───────────────────────────────────────────────────
 
-    /// @dev Payer files a partial dispute on an open tab.
-    ///      undisputed < totalCharged ≤ limit.
-    function filePartialDispute(uint256 idx, uint96 totalCharged, uint96 undisputedAmount) external {
-        if (_openIds.length == 0) return;
-        idx = bound(idx, 0, _openIds.length - 1);
-        bytes32 id = _openIds[idx];
-
-        uint96 limit = _limit[id];
-
-        // Ensure valid range: 0 < undisputedAmount < totalCharged ≤ limit
-        totalCharged = uint96(bound(totalCharged, 2, limit)); // at least 2 so dispute > 0
-        undisputedAmount = uint96(bound(undisputedAmount, 0, totalCharged - 1));
-
-        // degradationTimestamp must be in the past
-        uint64 degradTs = uint64(block.timestamp - 1);
-
-        uint32 undispCallCount = _callCountSeed++;
-        uint32 totalCallCount = _callCountSeed++;
-
-        bytes memory undispSig = _providerSig(id, undisputedAmount, undispCallCount);
-        bytes memory totalSig = _providerSig(id, totalCharged, totalCallCount);
-
-        vm.prank(payer);
-        try tab.filePartialDispute(
-            id, degradTs, undisputedAmount, undispCallCount, undispSig, totalCharged, totalCallCount, totalSig
-        ) {
-            uint96 disputed = totalCharged - undisputedAmount;
-            uint96 outflow = limit - disputed; // refund + providerUndisputed + undisputedFee
-
-            ghost_locked -= outflow;
-            _disputedAmount[id] = disputed;
-            _disputedIds.push(id);
-            _removeOpen(idx);
-        } catch {
-            // Revert (e.g. zero disputed, sig issues) — state unchanged.
-        }
-    }
-
-    // ── resolvePartialDispute ────────────────────────────────────────────────
-
-    /// @dev Admin resolves a PartiallyDisputed tab. Frozen disputed amount leaves.
-    function resolvePartialDispute(uint256 idx, bool giveToProvider) external {
-        if (_disputedIds.length == 0) return;
-        idx = bound(idx, 0, _disputedIds.length - 1);
-        bytes32 id = _disputedIds[idx];
-
-        uint96 disputed = _disputedAmount[id];
-        uint96 providerAmt = giveToProvider ? disputed : 0;
-        uint96 payerAmt = giveToProvider ? 0 : disputed;
-
-        ghost_locked -= disputed;
-
-        vm.prank(admin);
-        tab.resolvePartialDispute(id, providerAmt, payerAmt);
-
-        _removeDisputed(idx);
-    }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     function openCount() external view returns (uint256) {
         return _openIds.length;
-    }
-
-    function disputedCount() external view returns (uint256) {
-        return _disputedIds.length;
     }
 
     /// @dev Generate a valid provider EIP-712 signature for a charge attestation.
@@ -225,11 +157,6 @@ contract TabHandler is Test {
         _openIds.pop();
     }
 
-    function _removeDisputed(uint256 idx) internal {
-        uint256 last = _disputedIds.length - 1;
-        if (idx != last) _disputedIds[idx] = _disputedIds[last];
-        _disputedIds.pop();
-    }
 }
 
 // =============================================================================
@@ -253,8 +180,7 @@ contract TabInvariantTest is Test {
     }
 
     /// @notice INV-T1/T2: Contract balance always equals ghost_locked.
-    ///         Validates that providerPayout + fee + refund = limit on every close,
-    ///         and that partial disputes split correctly.
+    ///         Validates that providerPayout + fee + refund = limit on every close.
     function invariant_conservationOfFunds() public view {
         assertEq(
             usdc.balanceOf(address(tabContract)),

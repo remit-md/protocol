@@ -26,7 +26,7 @@ interface IRemitRouter {
     /// @notice Get the USDC token address for this chain
     function usdc() external view returns (address);
 
-    /// @notice Get the protocol admin (dispute resolution)
+    /// @notice Get the protocol admin
     function protocolAdmin() external view returns (address);
 
     /// @notice Get the fee recipient address

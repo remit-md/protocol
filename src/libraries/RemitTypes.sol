@@ -9,17 +9,15 @@ library RemitTypes {
         Funded, // 0: payer has funded, payee hasn't started
         Active, // 1: payee called claimStart
         Completed, // 2: funds released
-        Disputed, // 3: dispute filed, frozen
-        Cancelled, // 4: mutual or unilateral cancel
-        TimedOut // 5: timeout expired
+        Cancelled, // 3: mutual or unilateral cancel
+        TimedOut // 4: timeout expired
     }
 
     /// @notice Milestone status
     enum MilestoneStatus {
         Pending, // 0: not yet worked on
         Submitted, // 1: evidence submitted
-        Released, // 2: funds released for this milestone
-        Disputed // 3: dispute on this milestone
+        Released // 2: funds released for this milestone
     }
 
     /// @notice Tab status
@@ -27,8 +25,7 @@ library RemitTypes {
         Open, // 0: active, charges allowed
         Depleted, // 1: funds exhausted
         Closed, // 2: closed by either party
-        Expired, // 3: past expiry time
-        PartiallyDisputed // 4: V2 — partial dispute filed; undisputed settled, disputed frozen
+        Expired // 3: past expiry time
     }
 
     /// @notice Stream status
@@ -105,8 +102,6 @@ library RemitTypes {
         uint64 perUnit; // cost per unit (USDC, 6 decimals)
         uint64 expiry;
         TabStatus status;
-        uint64 degradationTimestamp; // V2: timestamp when service degraded (0 if no partial dispute)
-        uint96 disputedAmount; // V2: amount frozen under partial dispute (0 if no partial dispute)
     }
 
     /// @notice Payment stream
@@ -134,20 +129,6 @@ library RemitTypes {
         bytes32 taskHash;
         uint96 submissionBond;
     }
-
-    /// @notice V2: Dispute bond for escrow disputes (permissionless dispute filing)
-    struct DisputeBond {
-        address filer; // who filed the dispute (payer or payee)
-        uint96 filerBond; // bond amount posted by filer
-        uint96 respondentBond; // bond amount posted by respondent (0 if not yet posted)
-        uint64 counterBondDeadline; // timestamp after which filer can claim default win
-        bool respondentPosted; // true when respondent has posted their counter-bond
-    }
-
-    /// @notice V2: Dispute bond constants
-    uint96 constant DISPUTE_BOND_MIN = 500_000; // $0.50 minimum bond (USDC, 6 decimals)
-    uint96 constant DISPUTE_BOND_BPS = 500; // 5% base bond rate (in basis points)
-    uint64 constant COUNTER_BOND_WINDOW = 259_200; // 72 hours for respondent to post counter-bond
 
     /// @notice Deposit
     struct Deposit {

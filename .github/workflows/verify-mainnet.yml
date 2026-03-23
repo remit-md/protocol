@@ -82,10 +82,6 @@ jobs:
           forge verify-contract 0xB08B61453EbDeB3BA341458bF067f29F93F7BF0F \
             src/RemitKeyRegistry.sol:RemitKeyRegistry $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitArbitration (0x7cD670...)..."
-          forge verify-contract 0x7cD6700A4837ebF8aF85112154Cd59adCac39DCA \
-            src/RemitArbitration.sol:RemitArbitration $V || FAILED=$((FAILED+1))
-
           echo "Verifying RemitEscrow (0xc495f8...)..."
           forge verify-contract 0xc495f8aa159A59EBCE7BfA8205D9110ff71759ef \
             src/RemitEscrow.sol:RemitEscrow $V || FAILED=$((FAILED+1))
@@ -113,5 +109,5 @@ jobs:
             echo "Check output above. For Basescan: upgrade Etherscan plan or verify manually."
             exit 1
           else
-            echo "All 11 contracts verified successfully on Blockscout (base.blockscout.com)."
+            echo "All 10 contracts verified successfully on Blockscout (base.blockscout.com)."
           fi

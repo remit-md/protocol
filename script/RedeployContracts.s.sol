@@ -8,7 +8,6 @@ import {RemitTab} from "../src/RemitTab.sol";
 import {RemitStream} from "../src/RemitStream.sol";
 import {RemitFeeCalculator} from "../src/RemitFeeCalculator.sol";
 import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
-import {RemitArbitration} from "../src/RemitArbitration.sol";
 import {RemitRouter} from "../src/RemitRouter.sol";
 import {RemitOnrampVault} from "../src/RemitOnrampVault.sol";
 import {OnrampVaultFactory} from "../src/OnrampVaultFactory.sol";
@@ -21,7 +20,7 @@ import {OnrampVaultFactory} from "../src/OnrampVaultFactory.sol";
 ///         Updates:   Router via setFeeRecipient() (UUPS proxy, has setter).
 ///         Skips:     Bounty (already correct), Deposit (no fee), FeeCalculator (no recipient).
 ///
-/// @dev Must be run by the 0x3267 deployer (owns Router, FeeCalc, KeyRegistry, Arbitration).
+/// @dev Must be run by the 0x3267 deployer (owns Router, FeeCalc, KeyRegistry).
 ///
 ///      forge script script/RedeployContracts.s.sol \
 ///        --broadcast \
@@ -32,7 +31,6 @@ contract RedeployContracts is Script {
     address constant USDC = 0x2D846325766921935f37d5b4478196d3EF93707C;
     address constant FEE_CALC = 0xCCe1B8cEE59f860578Bed3C05FE2A80EEa04aAfB;
     address constant KEY_REGISTRY = 0xF5Ba0BAA124885EB88aD225e81A60864d5E43074;
-    address constant ARBITRATION = 0x4b88C779C970314216b97CA94CB6D380Db57CE91;
     address constant ROUTER = 0x3120F396fF6A9aFc5a9D92e28796082F1429e024;
 
     // ---- Contracts that are already correct (skip) ----
@@ -52,10 +50,10 @@ contract RedeployContracts is Script {
 
         // 1. Redeploy fund-holding contracts with correct feeRecipient
         //    Constructor arg order matters — verified against source:
-        //      Escrow:  (usdc, feeCalc, protocolAdmin, feeRecipient, keyRegistry, arbitration)
+        //      Escrow:  (usdc, feeCalc, protocolAdmin, feeRecipient, keyRegistry)
         //      Tab:     (usdc, feeCalc, feeRecipient, protocolAdmin, keyRegistry)
         //      Stream:  (usdc, feeCalc, feeRecipient, protocolAdmin, keyRegistry)
-        address newEscrow = address(new RemitEscrow(USDC, FEE_CALC, deployer, FEE_WALLET, KEY_REGISTRY, ARBITRATION));
+        address newEscrow = address(new RemitEscrow(USDC, FEE_CALC, deployer, FEE_WALLET, KEY_REGISTRY));
         address newTab = address(new RemitTab(USDC, FEE_CALC, FEE_WALLET, deployer, KEY_REGISTRY));
         address newStream = address(new RemitStream(USDC, FEE_CALC, FEE_WALLET, deployer, KEY_REGISTRY));
 
@@ -79,10 +77,7 @@ contract RedeployContracts is Script {
         RemitKeyRegistry(KEY_REGISTRY).authorizeContract(newTab);
         RemitKeyRegistry(KEY_REGISTRY).authorizeContract(newStream);
 
-        // 5. Authorize Escrow with Arbitration
-        RemitArbitration(ARBITRATION).authorizeEscrow(newEscrow);
-
-        // 6. Update Router: point to new contracts + fix feeRecipient
+        // 5. Update Router: point to new contracts + fix feeRecipient
         RemitRouter(ROUTER).setEscrow(newEscrow);
         RemitRouter(ROUTER).setTab(newTab);
         RemitRouter(ROUTER).setStream(newStream);

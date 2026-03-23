@@ -7,9 +7,8 @@
 #   3. USDC address is correct across all contracts
 #   4. FeeCalculator caller authorizations
 #   5. KeyRegistry contract authorizations
-#   6. Arbitration escrow authorization
-#   7. Ownership set correctly (if GNOSIS_SAFE env var is set)
-#   8. Fee recipient set correctly (if FEE_WALLET env var is set)
+#   6. Ownership set correctly (if GNOSIS_SAFE env var is set)
+#   7. Fee recipient set correctly (if FEE_WALLET env var is set)
 #
 # Usage:
 #   ./script/verify-deployment.sh [RPC_URL]
@@ -51,7 +50,6 @@ get_address() {
 
 FEECALC_PROXY=$(get_address "ERC1967Proxy" 0)
 KEY_REGISTRY=$(get_address "RemitKeyRegistry")
-ARBITRATION=$(get_address "RemitArbitration")
 ESCROW=$(get_address "RemitEscrow")
 TAB=$(get_address "RemitTab")
 STREAM=$(get_address "RemitStream")
@@ -60,7 +58,7 @@ DEPOSIT=$(get_address "RemitDeposit")
 ROUTER_PROXY=$(get_address "ERC1967Proxy" 1)
 
 # Sanity: all addresses must be non-empty
-for name in FEECALC_PROXY KEY_REGISTRY ARBITRATION ESCROW TAB STREAM BOUNTY DEPOSIT ROUTER_PROXY; do
+for name in FEECALC_PROXY KEY_REGISTRY ESCROW TAB STREAM BOUNTY DEPOSIT ROUTER_PROXY; do
   val="${!name}"
   if [ -z "$val" ]; then
     echo "ERROR: Could not extract $name from broadcast file"
@@ -71,7 +69,6 @@ done
 echo "Extracted addresses:"
 echo "  FeeCalc (proxy): $FEECALC_PROXY"
 echo "  KeyRegistry:     $KEY_REGISTRY"
-echo "  Arbitration:     $ARBITRATION"
 echo "  Escrow:          $ESCROW"
 echo "  Tab:             $TAB"
 echo "  Stream:          $STREAM"
@@ -127,7 +124,7 @@ has_code() {
 # 1. Contract existence
 # ---------------------------------------------------------------------------
 echo "--- Contract Existence ---"
-for name in FEECALC_PROXY KEY_REGISTRY ARBITRATION ESCROW TAB STREAM BOUNTY DEPOSIT ROUTER_PROXY; do
+for name in FEECALC_PROXY KEY_REGISTRY ESCROW TAB STREAM BOUNTY DEPOSIT ROUTER_PROXY; do
   val="${!name}"
   if has_code "$val"; then
     echo "  PASS  $name has code"
@@ -170,7 +167,6 @@ check "Tab.usdc()" "$MAINNET_USDC" "$(call "$TAB" "usdc()(address)")"
 check "Stream.usdc()" "$MAINNET_USDC" "$(call "$STREAM" "usdc()(address)")"
 check "Bounty.usdc()" "$MAINNET_USDC" "$(call "$BOUNTY" "usdc()(address)")"
 check "Deposit.usdc()" "$MAINNET_USDC" "$(call "$DEPOSIT" "usdc()(address)")"
-check "Arbitration.usdc()" "$MAINNET_USDC" "$(call "$ARBITRATION" "usdc()(address)")"
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -196,21 +192,13 @@ check_true "KeyRegistry.isAuthorizedContract(Deposit)" "$(call "$KEY_REGISTRY" "
 echo ""
 
 # ---------------------------------------------------------------------------
-# 6. Arbitration
-# ---------------------------------------------------------------------------
-echo "--- Arbitration ---"
-check_true "Arbitration.isAuthorizedEscrow(Escrow)" "$(call "$ARBITRATION" "isAuthorizedEscrow(address)(bool)" "$ESCROW")"
-echo ""
-
-# ---------------------------------------------------------------------------
-# 7. Ownership / Admin (if GNOSIS_SAFE is set)
+# 6. Ownership / Admin (if GNOSIS_SAFE is set)
 # ---------------------------------------------------------------------------
 ADMIN="${GNOSIS_SAFE:-}"
 if [ -n "$ADMIN" ]; then
   echo "--- Ownership (admin=$ADMIN) ---"
   check "FeeCalc.owner()" "$ADMIN" "$(call "$FEECALC_PROXY" "owner()(address)")"
   check "KeyRegistry.owner()" "$ADMIN" "$(call "$KEY_REGISTRY" "owner()(address)")"
-  check "Arbitration.owner()" "$ADMIN" "$(call "$ARBITRATION" "owner()(address)")"
   check "Router.owner()" "$ADMIN" "$(call "$ROUTER_PROXY" "owner()(address)")"
   check "Router.protocolAdmin()" "$ADMIN" "$(call "$ROUTER_PROXY" "protocolAdmin()(address)")"
   check "Escrow.protocolAdmin()" "$ADMIN" "$(call "$ESCROW" "protocolAdmin()(address)")"
@@ -222,7 +210,7 @@ if [ -n "$ADMIN" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 8. Fee recipient (if FEE_WALLET is set, else falls back to GNOSIS_SAFE)
+# 7. Fee recipient (if FEE_WALLET is set, else falls back to GNOSIS_SAFE)
 # ---------------------------------------------------------------------------
 FEE_WALLET_ADDR="${FEE_WALLET:-$ADMIN}"
 if [ -n "$FEE_WALLET_ADDR" ]; then

@@ -175,57 +175,6 @@ contract RemitEscrowFuzzTest is TestBase {
     }
 
     // =========================================================================
-    // Fuzz: dispute resolution invariant
-    // =========================================================================
-
-    /// @dev Dispute resolution: payerAmount + payeeAmount == amount (enforced by contract).
-    ///      Payer files dispute, payer wins (bond returned to payer) so net payer gain = payerAmt.
-    function testFuzz_disputeResolution_sumsMatch(uint96 payerAmt) public {
-        payerAmt = uint96(bound(payerAmt, 0, AMOUNT));
-        uint96 payeeAmt = AMOUNT - payerAmt;
-
-        bytes32 inv = keccak256(abi.encodePacked("dispute-fuzz", payerAmt));
-        _createAndActivate(inv);
-
-        // Capture balances before filing (so net includes bond round-trip)
-        uint256 payerBefore = usdc.balanceOf(payer);
-        uint256 payeeBefore = usdc.balanceOf(payee);
-
-        // Payer files dispute; payer already has 1 participation (createEscrow), 0 prior disputes → 1x bond
-        vm.prank(payer);
-        escrow.fileDispute(inv, keccak256("evidence"));
-
-        // payerWins=false (payeeWins=false means payer wins): payer's bond returned, payee has no bond
-        vm.prank(admin);
-        escrow.resolveDispute(inv, payerAmt, payeeAmt, false);
-
-        // payerGain = payerAmt (escrow share) - bond (paid) + bond (returned) = payerAmt
-        uint256 payerGain = usdc.balanceOf(payer) - payerBefore;
-        uint256 payeeGain = usdc.balanceOf(payee) - payeeBefore;
-
-        // Invariant: net gains (excluding bond round-trip) == escrowed amount
-        assertEq(payerGain + payeeGain, AMOUNT, "dispute: funds not conserved");
-        assertEq(payerGain, payerAmt, "payer received wrong amount");
-        assertEq(payeeGain, payeeAmt, "payee received wrong amount");
-    }
-
-    /// @dev Dispute resolution fails if amounts don't add up
-    function testFuzz_disputeResolution_revertsOnMismatch(uint96 payerAmt, uint96 payeeAmt) public {
-        // Ensure sum != AMOUNT
-        vm.assume(uint256(payerAmt) + uint256(payeeAmt) != uint256(AMOUNT));
-
-        bytes32 inv = keccak256(abi.encodePacked("dispute-mismatch-fuzz", payerAmt, payeeAmt));
-        _createAndActivate(inv);
-
-        vm.prank(payer);
-        escrow.fileDispute(inv, keccak256("evidence"));
-
-        vm.prank(admin);
-        vm.expectRevert();
-        escrow.resolveDispute(inv, payerAmt, payeeAmt, true);
-    }
-
-    // =========================================================================
     // Fuzz: state machine — no invalid transitions
     // =========================================================================
 

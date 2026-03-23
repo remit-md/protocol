@@ -7,7 +7,6 @@ export enum EventType {
   ESCROW_RELEASED = "escrow.released",
   ESCROW_TIMEOUT = "escrow.timeout",
   ESCROW_CANCELLED = "escrow.cancelled",
-  ESCROW_DISPUTED = "escrow.disputed",
   MILESTONE_RELEASED = "milestone.released",
   CLAIM_START_CONFIRMED = "claim_start.confirmed",
 
@@ -36,8 +35,6 @@ export enum EventType {
   PAYMENT_RECEIVED = "payment.received",
   DEPOSIT_LOCKED = "deposit.locked",
   DEPOSIT_RETURNED = "deposit.returned",
-  DISPUTE_FILED = "dispute.filed",
-  DISPUTE_RESOLVED = "dispute.resolved",
   REPUTATION_UPDATED = "reputation.updated",
 }
 
@@ -92,16 +89,6 @@ export interface EscrowCancelledPayload extends BaseEventPayload {
     payer: string;
     mutual: boolean;
     fee: string;
-    tx_hash: string;
-  };
-}
-
-export interface EscrowDisputedPayload extends BaseEventPayload {
-  event: EventType.ESCROW_DISPUTED;
-  data: {
-    invoice_id: string;
-    filer: string;
-    reason: string;
     tx_hash: string;
   };
 }
@@ -298,27 +285,6 @@ export interface DepositReturnedPayload extends BaseEventPayload {
   };
 }
 
-export interface DisputeFiledPayload extends BaseEventPayload {
-  event: EventType.DISPUTE_FILED;
-  data: {
-    invoice_id: string;
-    filer: string;
-    reason: string;
-    evidence_hash: string;
-    tx_hash: string;
-  };
-}
-
-export interface DisputeResolvedPayload extends BaseEventPayload {
-  event: EventType.DISPUTE_RESOLVED;
-  data: {
-    invoice_id: string;
-    payer_amount: string;
-    payee_amount: string;
-    tx_hash: string;
-  };
-}
-
 export interface ReputationUpdatedPayload extends BaseEventPayload {
   event: EventType.REPUTATION_UPDATED;
   data: {
@@ -345,7 +311,6 @@ export type EventPayload =
   | EscrowReleasedPayload
   | EscrowTimeoutPayload
   | EscrowCancelledPayload
-  | EscrowDisputedPayload
   | MilestoneReleasedPayload
   | ClaimStartConfirmedPayload
   | TabOpenedPayload
@@ -364,6 +329,4 @@ export type EventPayload =
   | PaymentReceivedPayload
   | DepositLockedPayload
   | DepositReturnedPayload
-  | DisputeFiledPayload
-  | DisputeResolvedPayload
   | ReputationUpdatedPayload;

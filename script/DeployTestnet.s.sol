@@ -12,7 +12,6 @@ import {RemitStream} from "../src/RemitStream.sol";
 import {RemitBounty} from "../src/RemitBounty.sol";
 import {RemitDeposit} from "../src/RemitDeposit.sol";
 import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
-import {RemitArbitration} from "../src/RemitArbitration.sol";
 import {RemitOnrampVault} from "../src/RemitOnrampVault.sol";
 import {OnrampVaultFactory} from "../src/OnrampVaultFactory.sol";
 import {MockUSDC} from "../src/test/MockUSDC.sol";
@@ -33,7 +32,6 @@ contract DeployTestnet is Script {
     address internal _usdc;
     address internal _feeCalcProxy;
     address internal _keyRegistry;
-    address internal _arbitration;
     address internal _routerProxy;
     address internal _escrow;
     address internal _tab;
@@ -53,11 +51,9 @@ contract DeployTestnet is Script {
         _deployMockUSDC();
         _deployFeeCalculator(deployer);
         _deployKeyRegistry(deployer);
-        _deployArbitration(deployer);
         _deployFundHolding(deployer, deployer);
         _authorizeFundHolding();
         _authorizeKeyRegistry();
-        _authorizeArbitration();
         _deployRouter(deployer, deployer, deployer);
         _wireRouter();
         _deployOnrampVaultFactory(deployer);
@@ -85,14 +81,9 @@ contract DeployTestnet is Script {
         console2.log("KeyRegistry:", _keyRegistry);
     }
 
-    function _deployArbitration(address owner) internal {
-        _arbitration = address(new RemitArbitration(_usdc, owner));
-        console2.log("Arbitration:", _arbitration);
-    }
-
     function _deployFundHolding(address protocolAdmin, address feeRecipient) internal {
         _escrow =
-            address(new RemitEscrow(_usdc, _feeCalcProxy, protocolAdmin, feeRecipient, _keyRegistry, _arbitration));
+            address(new RemitEscrow(_usdc, _feeCalcProxy, protocolAdmin, feeRecipient, _keyRegistry));
         _tab = address(new RemitTab(_usdc, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         _stream = address(new RemitStream(_usdc, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
         _bounty = address(new RemitBounty(_usdc, _feeCalcProxy, feeRecipient, protocolAdmin, _keyRegistry));
@@ -111,10 +102,6 @@ contract DeployTestnet is Script {
         kr.authorizeContract(_stream);
         kr.authorizeContract(_bounty);
         kr.authorizeContract(_deposit);
-    }
-
-    function _authorizeArbitration() internal {
-        RemitArbitration(address(_arbitration)).authorizeEscrow(_escrow);
     }
 
     function _authorizeFundHolding() internal {
@@ -165,7 +152,6 @@ contract DeployTestnet is Script {
         console2.log("Deployer:    ", deployer);
         console2.log("MockUSDC:    ", _usdc);
         console2.log("KeyRegistry: ", _keyRegistry);
-        console2.log("Arbitration: ", _arbitration);
         console2.log("FeeCalc:     ", _feeCalcProxy);
         console2.log("Router:      ", _routerProxy);
         console2.log("Escrow:      ", _escrow);
