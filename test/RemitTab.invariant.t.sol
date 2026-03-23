@@ -134,8 +134,6 @@ contract TabHandler is Test {
         _removeOpen(idx);
     }
 
-
-
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     function openCount() external view returns (uint256) {
@@ -156,7 +154,6 @@ contract TabHandler is Test {
         if (idx != last) _openIds[idx] = _openIds[last];
         _openIds.pop();
     }
-
 }
 
 // =============================================================================
