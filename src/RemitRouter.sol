@@ -265,6 +265,7 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     ) external override nonReentrant {
         if (from == address(0)) revert RemitErrors.ZeroAddress();
         if (recipient == address(0)) revert RemitErrors.ZeroAddress();
+        if (from == recipient) revert RemitErrors.SelfPayment(from);
         if (amount == 0) revert RemitErrors.ZeroAmount();
         if (amount < RemitTypes.MIN_AMOUNT) revert RemitErrors.BelowMinimum(amount, RemitTypes.MIN_AMOUNT);
 
