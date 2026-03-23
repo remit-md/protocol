@@ -72,7 +72,7 @@ contract EscrowStateful {
     constructor() {
         usdc = new MockUSDC();
         feeCalc = new MockFeeCalculator();
-        escrow = new RemitEscrow(address(usdc), address(feeCalc), ADMIN, FEE_WALLET, address(0), address(0));
+        escrow = new RemitEscrow(address(usdc), address(feeCalc), ADMIN, FEE_WALLET, address(0));
 
         _currentTime = uint64(block.timestamp);
 

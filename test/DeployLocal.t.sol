@@ -57,7 +57,7 @@ contract DeployLocalTest is Test {
 
         // 4. Fund-holding contracts
         escrow = new RemitEscrow(
-            address(usdc), address(feeCalc), deployer, deployer, address(keyRegistry), address(0)
+            address(usdc), address(feeCalc), deployer, deployer, address(keyRegistry)
         );
         tab = new RemitTab(address(usdc), address(feeCalc), deployer, deployer, address(keyRegistry));
         stream = new RemitStream(address(usdc), address(feeCalc), deployer, deployer, address(keyRegistry));

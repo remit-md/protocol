@@ -229,7 +229,7 @@ contract EscrowInvariantTest is Test {
     function setUp() public {
         usdc = new MockUSDC();
         feeCalc = new MockFeeCalculator();
-        escrowContract = new RemitEscrow(address(usdc), address(feeCalc), admin, feeRecipient, address(0), address(0));
+        escrowContract = new RemitEscrow(address(usdc), address(feeCalc), admin, feeRecipient, address(0));
         handler = new EscrowHandler(escrowContract, usdc, feeCalc, feeRecipient, admin);
         targetContract(address(handler));
     }

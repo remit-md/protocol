@@ -80,7 +80,7 @@ contract TestBase is Test {
         feeCalc = new MockFeeCalculator();
 
         // ── Mock-stack fund-holding contracts ─────────────────────────────────
-        escrow = new RemitEscrow(address(usdc), address(feeCalc), admin, feeRecipient, address(0), address(0));
+        escrow = new RemitEscrow(address(usdc), address(feeCalc), admin, feeRecipient, address(0));
         tabContract = new RemitTab(address(usdc), address(feeCalc), feeRecipient, admin, address(0));
         streamContract = new RemitStream(address(usdc), address(feeCalc), feeRecipient, admin, address(0));
         bountyContract = new RemitBounty(address(usdc), address(feeCalc), feeRecipient, admin, address(0));
@@ -92,7 +92,7 @@ contract TestBase is Test {
         realFeeCalc = RemitFeeCalculator(address(new ERC1967Proxy(address(feeCalcImpl), feeCalcInit)));
 
         // ── Real fund-holding contracts ───────────────────────────────────────
-        realEscrow = new RemitEscrow(address(usdc), address(realFeeCalc), admin, feeRecipient, address(0), address(0));
+        realEscrow = new RemitEscrow(address(usdc), address(realFeeCalc), admin, feeRecipient, address(0));
         realTab = new RemitTab(address(usdc), address(realFeeCalc), feeRecipient, admin, address(0));
         realStream = new RemitStream(address(usdc), address(realFeeCalc), feeRecipient, admin, address(0));
         realBounty = new RemitBounty(address(usdc), address(realFeeCalc), feeRecipient, admin, address(0));

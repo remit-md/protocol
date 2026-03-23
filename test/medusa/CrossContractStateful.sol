@@ -89,7 +89,7 @@ contract CrossContractStateful {
         feeCalc = new MockFeeCalculator();
 
         // Both contracts share the same USDC token and fee calculator
-        escrow = new RemitEscrow(address(usdc), address(feeCalc), ADMIN, FEE_WALLET, address(0), address(0));
+        escrow = new RemitEscrow(address(usdc), address(feeCalc), ADMIN, FEE_WALLET, address(0));
         tab = new RemitTab(address(usdc), address(feeCalc), FEE_WALLET, ADMIN, address(0));
 
         _currentTime = uint64(block.timestamp);
