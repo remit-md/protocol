@@ -43,8 +43,7 @@ library RemitTypes {
         Open, // 0: accepting submissions
         Claimed, // 1: submission received, under review
         Awarded, // 2: winner paid
-        Expired, // 3: deadline passed
-        Disputed // 4: V2 — rejection disputed by submitter; funds frozen
+        Expired // 3: deadline passed
     }
 
     /// @notice Deposit status
@@ -134,11 +133,7 @@ library RemitTypes {
         BountyStatus status;
         bytes32 taskHash;
         uint96 submissionBond;
-        uint64 rejectedAt; // V2: timestamp of rejection (0 = not rejected); enables 24h dispute window
     }
-
-    /// @notice V2: 24-hour dispute window for rejected bounty submissions
-    uint64 constant BOUNTY_DISPUTE_WINDOW = 86400; // 24 hours
 
     /// @notice V2: Dispute bond for escrow disputes (permissionless dispute filing)
     struct DisputeBond {

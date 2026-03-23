@@ -40,26 +40,9 @@ interface IRemitBounty {
     /// @param bountyId The bounty ID
     /// @param submitter Address of the submitter being rejected
     /// @param reason Non-empty rejection reason (reverts with BountyRejectionNoReason if empty)
-    /// @dev V2: opens a 24-hour dispute window. Bond held until window closes or dispute resolved.
-    ///      Emits BountyRejected. Status stays Claimed during the window.
+    /// @dev Bond is returned to submitter immediately. Bounty re-opens for new submissions.
+    ///      Emits BountyRejected.
     function rejectSubmission(bytes32 bountyId, address submitter, string calldata reason) external;
-
-    /// @notice Submitter disputes a rejection within the 24-hour window
-    /// @param bountyId The bounty ID
-    /// @dev Only callable by the rejected submitter within BOUNTY_DISPUTE_WINDOW seconds of rejection.
-    ///      Sets status to Disputed; funds frozen until admin resolves.
-    function disputeRejection(bytes32 bountyId) external;
-
-    /// @notice Finalize a rejection after the 24-hour dispute window expires without a dispute
-    /// @param bountyId The bounty ID
-    /// @dev Callable by anyone after window expires. Forfeits bond to poster, re-opens bounty.
-    function finalizeRejection(bytes32 bountyId) external;
-
-    /// @notice Admin resolves a disputed rejection
-    /// @param bountyId The bounty ID
-    /// @param submitterWins If true: submitter awarded bounty + bond returned. If false: bond forfeited, bounty re-opens.
-    /// @dev Only protocolAdmin.
-    function resolveRejectionDispute(bytes32 bountyId, bool submitterWins) external;
 
     /// @notice Reclaim bounty after deadline with no valid submission
     /// @param bountyId The bounty ID

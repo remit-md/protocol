@@ -17,7 +17,7 @@ import {RemitKeyValidator} from "./libraries/RemitKeyValidator.sol";
 /// @notice Open bounty system for AI agent task completion
 /// @dev Fund-holding contract. IMMUTABLE — no proxy, no upgrade path.
 ///      Poster locks USDC. Submitter bonds and transitions status to Claimed.
-///      Poster awards (bond returned to winner) or rejects (bond forfeited to poster, anti-spam).
+///      Poster awards (bond returned to winner) or rejects (bond returned to submitter, bounty re-opens).
 ///      Only one active submission at a time. CEI enforced throughout.
 contract RemitBounty is IRemitBounty, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -52,7 +52,7 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
     /// @param _usdc USDC token address
     /// @param _feeCalculator Fee calculator contract address
     /// @param _feeRecipient Address that receives protocol fees
-    /// @param _protocolAdmin Address that can resolve bounty rejection disputes
+    /// @param _protocolAdmin Address that can authorize/revoke relayers
     /// @param _keyRegistry V2: Session key registry (address(0) to disable)
     constructor(
         address _usdc,
@@ -141,8 +141,7 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
             winner: address(0),
             status: RemitTypes.BountyStatus.Open,
             taskHash: taskHash,
-            submissionBond: submissionBond,
-            rejectedAt: 0
+            submissionBond: submissionBond
         });
 
         // --- Interactions ---
@@ -211,9 +210,8 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
     }
 
     /// @inheritdoc IRemitBounty
-    /// @dev V2: requires non-empty reason. Opens 24-hour dispute window — bond held in contract.
-    ///      Status stays Claimed during window. Submitter may call disputeRejection() within window.
-    ///      CEI: validate → store rejection timestamp → emit event
+    /// @dev Requires non-empty reason. Bond returned to submitter immediately, bounty re-opens.
+    ///      CEI: validate → update state → return bond → emit event
     function rejectSubmission(bytes32 bountyId, address submitter, string calldata reason) external nonReentrant {
         RemitTypes.Bounty storage bounty = _getBounty(bountyId);
 
@@ -223,94 +221,17 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
         if (submitter != _pendingSubmitter[bountyId]) revert RemitErrors.Unauthorized(submitter);
         if (bytes(reason).length == 0) revert RemitErrors.BountyRejectionNoReason(bountyId);
 
-        // --- Effects ---
-        // V2: open dispute window instead of immediately forfeiting bond
-        bounty.rejectedAt = uint64(block.timestamp);
-        // _pendingSubmitter and _submissions retained until dispute window closes
-
-        // --- Interactions ---
-        emit RemitEvents.BountyRejected(
-            bountyId, submitter, bounty.poster, reason, uint64(block.timestamp) + RemitTypes.BOUNTY_DISPUTE_WINDOW
-        );
-    }
-
-    /// @inheritdoc IRemitBounty
-    /// @dev CEI: validate → set Disputed
-    function disputeRejection(bytes32 bountyId) external nonReentrant {
-        RemitTypes.Bounty storage bounty = _getBounty(bountyId);
-
-        // --- Checks ---
-        if (bounty.status != RemitTypes.BountyStatus.Claimed) revert RemitErrors.AlreadyClosed(bountyId);
-        if (bounty.rejectedAt == 0) revert RemitErrors.InvalidTimeout(0); // not in rejection state
-        if (msg.sender != _pendingSubmitter[bountyId]) revert RemitErrors.Unauthorized(msg.sender);
-        if (block.timestamp > bounty.rejectedAt + RemitTypes.BOUNTY_DISPUTE_WINDOW) {
-            revert RemitErrors.InvalidTimeout(bounty.rejectedAt + RemitTypes.BOUNTY_DISPUTE_WINDOW);
-        }
-
-        // --- Effects ---
-        bounty.status = RemitTypes.BountyStatus.Disputed;
-    }
-
-    /// @inheritdoc IRemitBounty
-    /// @dev CEI: validate → re-open → forfeit bond to poster
-    function finalizeRejection(bytes32 bountyId) external nonReentrant {
-        RemitTypes.Bounty storage bounty = _getBounty(bountyId);
-
-        // --- Checks ---
-        if (bounty.status != RemitTypes.BountyStatus.Claimed) revert RemitErrors.AlreadyClosed(bountyId);
-        if (bounty.rejectedAt == 0) revert RemitErrors.InvalidTimeout(0); // not in rejection state
-        if (block.timestamp <= bounty.rejectedAt + RemitTypes.BOUNTY_DISPUTE_WINDOW) {
-            revert RemitErrors.InvalidTimeout(bounty.rejectedAt + RemitTypes.BOUNTY_DISPUTE_WINDOW);
-        }
-
-        address rejectedSubmitter = _pendingSubmitter[bountyId];
         uint96 bond = bounty.submissionBond;
 
         // --- Effects ---
-        delete _submissions[bountyId][rejectedSubmitter];
+        delete _submissions[bountyId][submitter];
         delete _pendingSubmitter[bountyId];
-        bounty.rejectedAt = 0;
         bounty.status = RemitTypes.BountyStatus.Open;
 
         // --- Interactions ---
-        // Bond forfeited: poster receives it as anti-spam compensation
-        if (bond > 0) usdc.safeTransfer(bounty.poster, bond);
-    }
+        if (bond > 0) usdc.safeTransfer(submitter, bond);
 
-    /// @inheritdoc IRemitBounty
-    /// @dev Only protocolAdmin. Resolves a disputed rejection.
-    ///      CEI: validate → update state → distribute funds
-    function resolveRejectionDispute(bytes32 bountyId, bool submitterWins) external nonReentrant {
-        if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
-        RemitTypes.Bounty storage bounty = _getBounty(bountyId);
-
-        // --- Checks ---
-        if (bounty.status != RemitTypes.BountyStatus.Disputed) revert RemitErrors.AlreadyClosed(bountyId);
-
-        address winner = _pendingSubmitter[bountyId];
-        uint96 bond = bounty.submissionBond;
-
-        // --- Effects ---
-        delete _submissions[bountyId][winner];
-        delete _pendingSubmitter[bountyId];
-        bounty.rejectedAt = 0;
-
-        if (submitterWins) {
-            uint96 fee = feeCalculator.calculateFee(bounty.poster, bounty.amount);
-            if (fee > bounty.amount) fee = bounty.amount; // safety cap
-            uint96 winnerGets = bounty.amount - fee;
-            bounty.status = RemitTypes.BountyStatus.Awarded;
-            bounty.winner = winner;
-            // --- Interactions ---
-            usdc.safeTransfer(winner, winnerGets);
-            if (bond > 0) usdc.safeTransfer(winner, bond); // return submission bond
-            if (fee > 0) usdc.safeTransfer(feeRecipient, fee);
-            emit RemitEvents.BountyAwarded(bountyId, winner, winnerGets, fee);
-        } else {
-            bounty.status = RemitTypes.BountyStatus.Open;
-            // --- Interactions ---
-            if (bond > 0) usdc.safeTransfer(bounty.poster, bond); // bond forfeited to poster
-        }
+        emit RemitEvents.BountyRejected(bountyId, submitter, bounty.poster, reason);
     }
 
     /// @inheritdoc IRemitBounty
@@ -387,8 +308,7 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
             winner: address(0),
             status: RemitTypes.BountyStatus.Open,
             taskHash: taskHash,
-            submissionBond: submissionBond,
-            rejectedAt: 0
+            submissionBond: submissionBond
         });
 
         // --- Interactions ---
