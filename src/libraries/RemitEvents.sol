@@ -111,14 +111,8 @@ library RemitEvents {
         bytes32 indexed streamId, address indexed payer, address indexed payee, uint96 totalStreamed, uint96 fee
     );
 
-    /// @notice Emitted when a bounty submission is rejected (reason required)
-    event BountyRejected(
-        bytes32 indexed bountyId,
-        address indexed submitter,
-        address indexed poster,
-        string reason,
-        uint64 disputeWindowEnds
-    );
+    /// @notice Emitted when a bounty submission is rejected (bond returned to submitter)
+    event BountyRejected(bytes32 indexed bountyId, address indexed submitter, address indexed poster, string reason);
 
     /// @notice Emitted when a master key delegates a session key
     event KeyDelegated(

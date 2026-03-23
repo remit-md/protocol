@@ -163,11 +163,9 @@ contract RemitBountyTest is Test {
         vm.prank(submitter);
         bounty.submitBounty(BOUNTY_ID, EVIDENCE);
 
-        // Reject + finalize to reset to Open (V2: requires dispute window)
+        // Reject to reset to Open — immediate, no dispute window
         vm.prank(poster);
         bounty.rejectSubmission(BOUNTY_ID, submitter, "insufficient work");
-        vm.warp(block.timestamp + RemitTypes.BOUNTY_DISPUTE_WINDOW + 1);
-        bounty.finalizeRejection(BOUNTY_ID);
 
         // Now maxAttempts reached (attemptCount == 1 == maxAttempts)
         vm.prank(submitter2);
@@ -252,44 +250,38 @@ contract RemitBountyTest is Test {
     // rejectSubmission
     // =========================================================================
 
-    function test_rejectSubmission_bondForfeitedToPoster() public {
+    function test_rejectSubmission_bondReturnedToSubmitter() public {
         _postBounty(BOND, 3);
 
         vm.prank(submitter);
         bounty.submitBounty(BOUNTY_ID, EVIDENCE);
 
         uint256 posterBefore = usdc.balanceOf(poster);
+        uint256 submitterBefore = usdc.balanceOf(submitter);
 
-        // V2: reject with reason, then finalize after dispute window
         vm.prank(poster);
         bounty.rejectSubmission(BOUNTY_ID, submitter, "work not done");
 
-        // Bond still in contract during dispute window
+        // Bond returned to submitter immediately, poster balance unchanged
+        assertEq(usdc.balanceOf(submitter), submitterBefore + BOND);
         assertEq(usdc.balanceOf(poster), posterBefore);
-        assertEq(uint8(bounty.getBounty(BOUNTY_ID).status), uint8(RemitTypes.BountyStatus.Claimed));
-
-        // After 24h, anyone can finalize → bond forfeited to poster
-        vm.warp(block.timestamp + RemitTypes.BOUNTY_DISPUTE_WINDOW + 1);
-        bounty.finalizeRejection(BOUNTY_ID);
-
-        assertEq(usdc.balanceOf(poster), posterBefore + BOND); // bond forfeited to poster
         assertEq(uint8(bounty.getBounty(BOUNTY_ID).status), uint8(RemitTypes.BountyStatus.Open));
         assertEq(bounty.getPendingSubmitter(BOUNTY_ID), address(0));
-        assertEq(bounty.getSubmission(BOUNTY_ID, submitter), bytes32(0)); // cleared
+        assertEq(bounty.getSubmission(BOUNTY_ID, submitter), bytes32(0));
+        // Bounty amount still locked in contract
+        assertEq(usdc.balanceOf(address(bounty)), AMOUNT);
     }
 
     function test_rejectSubmission_andResubmit() public {
         _postBounty(BOND, 3);
 
-        // First submitter rejected + finalize (after dispute window)
+        // First submitter rejected — bond returned, bounty re-opens immediately
         vm.prank(submitter);
         bounty.submitBounty(BOUNTY_ID, EVIDENCE);
         vm.prank(poster);
         bounty.rejectSubmission(BOUNTY_ID, submitter, "not good enough");
-        vm.warp(block.timestamp + RemitTypes.BOUNTY_DISPUTE_WINDOW + 1);
-        bounty.finalizeRejection(BOUNTY_ID);
 
-        // Second submitter
+        // Second submitter can submit immediately
         vm.prank(submitter2);
         bounty.submitBounty(BOUNTY_ID, EVIDENCE_2);
 
