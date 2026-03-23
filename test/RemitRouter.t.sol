@@ -397,6 +397,12 @@ contract RemitRouterTest is Test {
         );
     }
 
+    function test_settleX402_revertsOnSelfPayment() public {
+        address from = _payerAddr();
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.SelfPayment.selector, from));
+        router.settleX402(from, from, AMOUNT, 0, block.timestamp + 1, bytes32(0), 27, bytes32(0), bytes32(0));
+    }
+
     function test_settleX402_revertsOnExpiredAuth() public {
         bytes32 nonce = bytes32(uint256(5));
         address from = _payerAddr();
