@@ -29,17 +29,17 @@ import {RemitRouter} from "../src/RemitRouter.sol";
 ///      Run via deploy-testnet.yml workflow with --broadcast.
 contract TestRouterMigration is Script {
     // Infrastructure (do NOT redeploy)
-    address constant USDC = 0x2d846325766921935f37d5b4478196d3ef93707c;
-    address constant FEE_CALC = 0xcce1b8cee59f860578bed3c05fe2a80eea04aafb;
-    address constant KEY_REGISTRY = 0xf5ba0baa124885eb88ad225e81a60864d5e43074;
-    address constant ROUTER = 0x3120f396ff6a9afc5a9d92e28796082f1429e024;
+    address constant USDC = 0x2D846325766921935f37d5b4478196d3EF93707C;
+    address constant FEE_CALC = 0xCCe1B8cEE59f860578Bed3C05FE2A80EEa04aAfB;
+    address constant KEY_REGISTRY = 0xF5Ba0BAA124885EB88aD225e81A60864d5E43074;
+    address constant ROUTER = 0x3120F396fF6A9aFc5a9D92e28796082F1429e024;
     address constant FEE_WALLET = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38;
 
     // Server relayer
     address constant RELAYER = 0x3267B8B2D4A43F7eEd02B11a1564Faf8C9617020;
 
     // Current Tab (should match Router.tab())
-    address constant CURRENT_TAB = 0x9415f510d8c6199e0f66bde927d7d88de391f5e8;
+    address constant CURRENT_TAB = 0x9415f510D8C6199e0f66Bde927D7d88dE391f5E8;
 
     function run() external {
         address deployer = msg.sender;

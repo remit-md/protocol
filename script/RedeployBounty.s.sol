@@ -16,10 +16,10 @@ import {RemitRouter} from "../src/RemitRouter.sol";
 ///      source .env.testnet && forge script script/RedeployBounty.s.sol \
 ///        --broadcast --rpc-url $RPC_URL --private-key $DEPLOYER_PRIVATE_KEY
 contract RedeployBounty is Script {
-    address constant USDC = 0x2d846325766921935f37d5b4478196d3ef93707c;
-    address constant FEE_CALC = 0xcce1b8cee59f860578bed3c05fe2a80eea04aafb;
-    address constant KEY_REGISTRY = 0xf5ba0baa124885eb88ad225e81a60864d5e43074;
-    address constant ROUTER = 0x3120f396ff6a9afc5a9d92e28796082f1429e024;
+    address constant USDC = 0x2D846325766921935f37d5b4478196d3EF93707C;
+    address constant FEE_CALC = 0xCCe1B8cEE59f860578Bed3C05FE2A80EEa04aAfB;
+    address constant KEY_REGISTRY = 0xF5Ba0BAA124885EB88aD225e81A60864d5E43074;
+    address constant ROUTER = 0x3120F396fF6A9aFc5a9D92e28796082F1429e024;
     address constant FEE_WALLET = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38;
 
     function run() external {
