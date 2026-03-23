@@ -148,6 +148,7 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
             status: RemitTypes.EscrowStatus.Funded,
             claimStarted: false,
             evidenceSubmitted: false,
+            milestoneReleased: 0,
             evidenceHash: bytes32(0),
             milestoneCount: uint8(milestones.length),
             splitCount: uint8(splits.length)
@@ -237,6 +238,7 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
             status: RemitTypes.EscrowStatus.Funded,
             claimStarted: false,
             evidenceSubmitted: false,
+            milestoneReleased: 0,
             evidenceHash: bytes32(0),
             milestoneCount: uint8(milestones.length),
             splitCount: uint8(splits.length)
@@ -430,6 +432,7 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
 
         // --- Effects ---
         milestone.status = RemitTypes.MilestoneStatus.Released;
+        escrow.milestoneReleased += milestoneAmount;
 
         // Check if all milestones are released
         bool allReleased = true;
@@ -550,19 +553,26 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
 
         uint96 amount = escrow.amount;
         uint96 fee = escrow.feeAmount;
+        uint96 released = escrow.milestoneReleased;
         address payer = escrow.payer;
         address payee = escrow.payee;
+
+        // Subtract already-released milestone amounts (raw amounts including fees)
+        uint96 remaining = amount - released;
+        // Proportional fee for the remaining portion
+        uint96 remainingFee = uint96((uint256(fee) * remaining) / amount);
+        uint96 payeeAmount = remaining - remainingFee;
 
         // --- Effects ---
         escrow.status = RemitTypes.EscrowStatus.Completed;
         feeCalculator.recordTransaction(payer, amount);
 
         // --- Interactions ---
-        usdc.safeTransfer(payee, amount - fee);
-        usdc.safeTransfer(feeRecipient, fee);
+        usdc.safeTransfer(payee, payeeAmount);
+        usdc.safeTransfer(feeRecipient, remainingFee);
 
-        emit RemitEvents.EscrowReleased(invoiceId, payee, amount - fee, fee);
-        emit RemitEvents.FeeCollected(invoiceId, fee, feeRecipient);
+        emit RemitEvents.EscrowReleased(invoiceId, payee, payeeAmount, remainingFee);
+        emit RemitEvents.FeeCollected(invoiceId, remainingFee, feeRecipient);
     }
 
     // =========================================================================

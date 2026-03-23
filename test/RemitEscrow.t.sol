@@ -616,6 +616,116 @@ contract RemitEscrowTest is TestBase {
         escrow.claimTimeoutPayee(INV);
     }
 
+    /// @dev CRITICAL: Conservation test — claimTimeoutPayee must subtract already-released milestones.
+    /// Without the fix, payee would receive milestone payout + full timeout payout > escrowed amount.
+    function test_claimTimeoutPayee_subtractsMilestoneReleased() public {
+        // Create 100 USDC escrow with 3 milestones: 30 + 40 + 30
+        uint96[] memory amounts = new uint96[](3);
+        amounts[0] = 30e6;
+        amounts[1] = 40e6;
+        amounts[2] = 30e6;
+        _createEscrowWithMilestones(INV, amounts);
+
+        vm.prank(payee);
+        escrow.claimStart(INV);
+
+        // Submit evidence for milestone 0, payer releases it
+        vm.prank(payee);
+        escrow.submitEvidence(INV, 0, keccak256("m0-evidence"));
+        vm.prank(payer);
+        escrow.releaseMilestone(INV, 0);
+
+        // Track balances after milestone release
+        uint256 payeeAfterMilestone = usdc.balanceOf(payee);
+        uint256 feeAfterMilestone = usdc.balanceOf(feeRecipient);
+        uint256 contractAfterMilestone = usdc.balanceOf(address(escrow));
+
+        // Verify milestoneReleased tracking
+        RemitTypes.Escrow memory e = escrow.getEscrow(INV);
+        assertEq(e.milestoneReleased, 30e6, "milestoneReleased should track raw milestone amount");
+        assertEq(contractAfterMilestone, 70e6, "contract should hold remaining 70 USDC");
+
+        // Warp past timeout, payee claims remaining via timeout
+        vm.warp(block.timestamp + TIMEOUT_DELTA + 1);
+        vm.prank(payee);
+        escrow.claimTimeoutPayee(INV);
+
+        // Verify conservation: total outflow must equal 100 USDC (original amount)
+        uint256 payeeFinal = usdc.balanceOf(payee);
+        uint256 feeFinal = usdc.balanceOf(feeRecipient);
+        uint256 contractFinal = usdc.balanceOf(address(escrow));
+
+        // Contract should be fully drained for this escrow
+        assertEq(contractFinal, 0, "contract should be empty after full payout");
+
+        // Total payee + total fees = original amount
+        assertEq(payeeFinal + feeFinal, 100e6, "conservation: payee + fees = original amount");
+
+        // Verify the timeout payout is the REMAINING portion, not the full amount
+        // 1% fee on 100e6 = 1e6 total fee
+        // Milestone 0 fee: (1e6 * 30e6) / 100e6 = 300_000
+        // Milestone 0 net to payee: 30e6 - 300_000 = 29_700_000
+        // Remaining in contract: 70e6
+        // Remaining fee: (1e6 * 70e6) / 100e6 = 700_000
+        // Payee timeout payout: 70e6 - 700_000 = 69_300_000
+        uint256 payeeTimeoutPayout = payeeFinal - payeeAfterMilestone;
+        assertEq(payeeTimeoutPayout, 69_300_000, "payee timeout payout = remaining minus proportional fee");
+
+        uint256 feeTimeoutPayout = feeFinal - feeAfterMilestone;
+        assertEq(feeTimeoutPayout, 700_000, "fee timeout payout = proportional fee on remaining");
+    }
+
+    /// @dev Conservation test with ALL milestones released — claimTimeoutPayee should pay nothing extra
+    function test_claimTimeoutPayee_revertsWhenAllMilestonesReleased() public {
+        uint96[] memory amounts = new uint96[](2);
+        amounts[0] = 50e6;
+        amounts[1] = 50e6;
+        _createEscrowWithMilestones(INV, amounts);
+
+        vm.prank(payee);
+        escrow.claimStart(INV);
+
+        // Release both milestones
+        vm.prank(payee);
+        escrow.submitEvidence(INV, 0, keccak256("m0"));
+        vm.prank(payer);
+        escrow.releaseMilestone(INV, 0);
+
+        vm.prank(payee);
+        escrow.submitEvidence(INV, 1, keccak256("m1"));
+        vm.prank(payer);
+        escrow.releaseMilestone(INV, 1);
+
+        // Escrow is now Completed (all milestones released)
+        RemitTypes.Escrow memory e = escrow.getEscrow(INV);
+        assertEq(uint8(e.status), uint8(RemitTypes.EscrowStatus.Completed));
+
+        // claimTimeoutPayee should revert — escrow already Completed
+        vm.warp(block.timestamp + TIMEOUT_DELTA + 1);
+        vm.prank(payee);
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.EscrowFrozen.selector, INV));
+        escrow.claimTimeoutPayee(INV);
+    }
+
+    /// @dev Frame condition: milestoneReleased is zero for non-milestone escrows
+    function test_claimTimeoutPayee_nonMilestoneUnchanged() public {
+        _createAndActivate(INV);
+
+        vm.prank(payee);
+        escrow.submitEvidence(INV, 0, keccak256("evidence"));
+
+        vm.warp(block.timestamp + TIMEOUT_DELTA + 1);
+
+        uint96 fee = uint96((uint256(AMOUNT) * 100) / 10_000);
+        uint256 payeeBefore = usdc.balanceOf(payee);
+
+        vm.prank(payee);
+        escrow.claimTimeoutPayee(INV);
+
+        // Non-milestone escrow: milestoneReleased = 0, so payout = amount - fee (same as before)
+        assertEq(usdc.balanceOf(payee), payeeBefore + (AMOUNT - fee));
+    }
+
     // =========================================================================
     // Double-fund & edge cases
     // =========================================================================
