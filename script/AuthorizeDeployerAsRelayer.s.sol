@@ -19,9 +19,9 @@ import {RemitStream} from "../src/RemitStream.sol";
 ///        --rpc-url $ALCHEMY_BASE_SEPOLIA_URL \
 ///        --private-key $DEPLOYER_PRIVATE_KEY
 contract AuthorizeDeployerAsRelayer is Script {
-    address constant ESCROW = 0x9AC531dd432d5dcF637D288290E5A23F2eE36594;
-    address constant TAB = 0xE6D1Bc6dE70Dbc432d5fFbE8Bcd2C578C49Eb23b;
-    address constant STREAM = 0x9e54bFB3Dcd1dB1235655a4D22b1c1d74b62C883;
+    address constant ESCROW = 0x47de7cdd757e3765d36c083dab59b2c5a9d249f2;
+    address constant TAB = 0x9415f510d8c6199e0f66bde927d7d88de391f5e8;
+    address constant STREAM = 0x20d413e0eac0f5da3c8630667fd16a94fcd7231a;
 
     function run() external {
         address deployer = msg.sender;

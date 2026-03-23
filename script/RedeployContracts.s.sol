@@ -29,17 +29,17 @@ import {OnrampVaultFactory} from "../src/OnrampVaultFactory.sol";
 ///        --private-key $DEPLOYER_PRIVATE_KEY
 contract RedeployContracts is Script {
     // ---- Infrastructure (do NOT redeploy — proxies or shared contracts) ----
-    address constant USDC = 0x142aD61B8d2edD6b3807D9266866D97C35Ee0317;
-    address constant FEE_CALC = 0x853CFc2387C184E4492892475adfc19A23FF2e4F;
-    address constant KEY_REGISTRY = 0x97ff63c9E24Fc074023F5d1251E544dCDaC93886;
-    address constant ARBITRATION = 0x3b2C97AafCdFBD5F6C9cF86dDa684Faa248008B1;
-    address constant ROUTER = 0xb3E96ebE54138d1c0caea00Ae098309C7E0138eC;
+    address constant USDC = 0x2d846325766921935f37d5b4478196d3ef93707c;
+    address constant FEE_CALC = 0xcce1b8cee59f860578bed3c05fe2a80eea04aafb;
+    address constant KEY_REGISTRY = 0xf5ba0baa124885eb88ad225e81a60864d5e43074;
+    address constant ARBITRATION = 0x4b88c779c970314216b97ca94cb6d380db57ce91;
+    address constant ROUTER = 0x3120f396ff6a9afc5a9d92e28796082f1429e024;
 
     // ---- Contracts that are already correct (skip) ----
-    address constant BOUNTY = 0x2D08DD3093De3F22f85300330671122300F1e01b;
+    address constant BOUNTY = 0xb3868471c3034280cce3a56dd37c6154c3bb0b32;
 
     // ---- Dedicated fee wallet (only receives fees, never sends) ----
-    address constant FEE_WALLET = 0xd3f721BDF92a2bB5Dd8d2FE2AFC03aFE5629B420;
+    address constant FEE_WALLET = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38;
 
     function run() external {
         address deployer = msg.sender;

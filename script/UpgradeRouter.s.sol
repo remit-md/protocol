@@ -16,7 +16,7 @@ import {RemitRouter} from "../src/RemitRouter.sol";
 ///      Existing storage slots unchanged — safe for UUPS upgrade.
 contract UpgradeRouter is Script {
     /// @dev Current Router proxy address (Base Sepolia).
-    address constant ROUTER_PROXY = 0xb3E96ebE54138d1c0caea00Ae098309C7E0138eC;
+    address constant ROUTER_PROXY = 0x3120f396ff6a9afc5a9d92e28796082f1429e024;
 
     function run() external {
         address deployer = msg.sender;
