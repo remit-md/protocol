@@ -62,8 +62,8 @@ jobs:
           forge verify-contract 0xae8B402c79003f537631E2F30C3fE9924a649126 \
             src/RemitFeeCalculator.sol:RemitFeeCalculator $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitRouter impl (0x96E10D...)..."
-          forge verify-contract 0x96E10D059bD708eE29a5492cF0663dfD09E4c2E7 \
+          echo "Verifying RemitRouter impl (0x820982...)..."
+          forge verify-contract 0x820982f3a311Dfa5E27075076dE8e322507e8F71 \
             src/RemitRouter.sol:RemitRouter $V || FAILED=$((FAILED+1))
 
           echo ""
@@ -84,24 +84,24 @@ jobs:
           forge verify-contract 0xB08B61453EbDeB3BA341458bF067f29F93F7BF0F \
             src/RemitKeyRegistry.sol:RemitKeyRegistry $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitEscrow (0xc495f8...)..."
-          forge verify-contract 0xc495f8aa159A59EBCE7BfA8205D9110ff71759ef \
+          echo "Verifying RemitEscrow (0xC2BC70...)..."
+          forge verify-contract 0xC2BC7022cEe32aC8293719e212a4DBe47b3c646B \
             src/RemitEscrow.sol:RemitEscrow $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitTab (0xAfcCC7...)..."
-          forge verify-contract 0xAfcCC74d5FAe9fD26B3725ee84D21198d230c145 \
+          echo "Verifying RemitTab (0x7FC5B3...)..."
+          forge verify-contract 0x7FC5B33Ba6dfB5C3345922E67B1D48356F4b592b \
             src/RemitTab.sol:RemitTab $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitStream (0xC0C66e...)..."
-          forge verify-contract 0xC0C66e98a96c7b3575639464eddBe4a7c9f71CB2 \
+          echo "Verifying RemitStream (0xC2D32d...)..."
+          forge verify-contract 0xC2D32d9aC96Bc7B6Ef8c093E2Aced7f9AdE1D0Ac \
             src/RemitStream.sol:RemitStream $V || FAILED=$((FAILED+1))
 
           echo "Verifying RemitBounty (0x6cf057...)..."
           forge verify-contract 0x6cf0570078c831440866ad60dd4ff43ef676f5bb \
             src/RemitBounty.sol:RemitBounty $V || FAILED=$((FAILED+1))
 
-          echo "Verifying RemitDeposit (0x31fCa8...)..."
-          forge verify-contract 0x31fCa8B58258723C409823292d291D295e98781e \
+          echo "Verifying RemitDeposit (0x888E6b...)..."
+          forge verify-contract 0x888E6b0f66d64C98Fec93dcC615f4A06318754A4 \
             src/RemitDeposit.sol:RemitDeposit $V || FAILED=$((FAILED+1))
 
           echo ""
