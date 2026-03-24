@@ -12,8 +12,6 @@ import {RemitStream} from "../src/RemitStream.sol";
 import {RemitBounty} from "../src/RemitBounty.sol";
 import {RemitDeposit} from "../src/RemitDeposit.sol";
 import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
-import {RemitOnrampVault} from "../src/RemitOnrampVault.sol";
-import {OnrampVaultFactory} from "../src/OnrampVaultFactory.sol";
 import {MockUSDC} from "../src/test/MockUSDC.sol";
 
 /// @title DeployTestnet
@@ -38,7 +36,6 @@ contract DeployTestnet is Script {
     address internal _stream;
     address internal _bounty;
     address internal _deposit;
-    address internal _onrampVaultFactory;
 
     function run() external {
         address deployer = msg.sender;
@@ -56,7 +53,6 @@ contract DeployTestnet is Script {
         _authorizeKeyRegistry();
         _deployRouter(deployer, deployer, deployer);
         _wireRouter();
-        _deployOnrampVaultFactory(deployer);
         // Mint $1M USDC to deployer for faucet seeding.
         MockUSDC(_usdc).mint(deployer, 1_000_000e6);
         vm.stopBroadcast();
@@ -137,13 +133,6 @@ contract DeployTestnet is Script {
         RemitFeeCalculator(_feeCalcProxy).authorizeCaller(_routerProxy);
     }
 
-    function _deployOnrampVaultFactory(address feeRecipient) internal {
-        RemitOnrampVault vaultImpl = new RemitOnrampVault();
-        _onrampVaultFactory = address(new OnrampVaultFactory(address(vaultImpl), _usdc, feeRecipient));
-        console2.log("OnrampVault (impl):", address(vaultImpl));
-        console2.log("OnrampVaultFactory:", _onrampVaultFactory);
-    }
-
     function _logSummary(address deployer) internal view {
         console2.log("");
         console2.log("=== Deployment Complete ===");
@@ -158,7 +147,6 @@ contract DeployTestnet is Script {
         console2.log("Stream:      ", _stream);
         console2.log("Bounty:      ", _bounty);
         console2.log("Deposit:     ", _deposit);
-        console2.log("VaultFactory:", _onrampVaultFactory);
         console2.log("");
         console2.log("=== Hetzner .env snippet ===");
         console2.log("CHAIN_ID=84532");
@@ -171,6 +159,5 @@ contract DeployTestnet is Script {
         console2.log("STREAM_ADDRESS=", _stream);
         console2.log("BOUNTY_ADDRESS=", _bounty);
         console2.log("DEPOSIT_ADDRESS=", _deposit);
-        console2.log("ONRAMP_VAULT_FACTORY_ADDRESS=", _onrampVaultFactory);
     }
 }

@@ -9,14 +9,12 @@ import {RemitStream} from "../src/RemitStream.sol";
 import {RemitFeeCalculator} from "../src/RemitFeeCalculator.sol";
 import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
 import {RemitRouter} from "../src/RemitRouter.sol";
-import {RemitOnrampVault} from "../src/RemitOnrampVault.sol";
-import {OnrampVaultFactory} from "../src/OnrampVaultFactory.sol";
 
 /// @title RedeployContracts
 /// @notice Fix feeRecipient on contracts that were deployed with the deployer
 ///         address instead of the dedicated fee wallet.
 ///
-///         Redeploys: Escrow, Tab, Stream, OnrampVaultFactory (immutable feeRecipient).
+///         Redeploys: Escrow, Tab, Stream (immutable feeRecipient).
 ///         Updates:   Router via setFeeRecipient() (UUPS proxy, has setter).
 ///         Skips:     Bounty (already correct), Deposit (no fee), FeeCalculator (no recipient).
 ///
@@ -61,23 +59,17 @@ contract RedeployContracts is Script {
         console2.log("New Tab:    ", newTab);
         console2.log("New Stream: ", newStream);
 
-        // 2. Redeploy OnrampVaultFactory (also has immutable feeRecipient)
-        RemitOnrampVault vaultImpl = new RemitOnrampVault();
-        address newFactory = address(new OnrampVaultFactory(address(vaultImpl), USDC, FEE_WALLET));
-        console2.log("New VaultImpl:   ", address(vaultImpl));
-        console2.log("New VaultFactory:", newFactory);
-
-        // 3. Authorize new contracts with FeeCalculator
+        // 2. Authorize new contracts with FeeCalculator
         RemitFeeCalculator(FEE_CALC).authorizeCaller(newEscrow);
         RemitFeeCalculator(FEE_CALC).authorizeCaller(newTab);
         RemitFeeCalculator(FEE_CALC).authorizeCaller(newStream);
 
-        // 4. Authorize with KeyRegistry
+        // 3. Authorize with KeyRegistry
         RemitKeyRegistry(KEY_REGISTRY).authorizeContract(newEscrow);
         RemitKeyRegistry(KEY_REGISTRY).authorizeContract(newTab);
         RemitKeyRegistry(KEY_REGISTRY).authorizeContract(newStream);
 
-        // 5. Update Router: point to new contracts + fix feeRecipient
+        // 4. Update Router: point to new contracts + fix feeRecipient
         RemitRouter(ROUTER).setEscrow(newEscrow);
         RemitRouter(ROUTER).setTab(newTab);
         RemitRouter(ROUTER).setStream(newStream);
@@ -90,7 +82,6 @@ contract RedeployContracts is Script {
         console2.log("ESCROW_ADDRESS=", newEscrow);
         console2.log("TAB_ADDRESS=", newTab);
         console2.log("STREAM_ADDRESS=", newStream);
-        console2.log("ONRAMP_VAULT_FACTORY_ADDRESS=", newFactory);
         console2.log("");
         console2.log("=== Unchanged ===");
         console2.log("BOUNTY_ADDRESS=", BOUNTY);

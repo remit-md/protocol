@@ -15,7 +15,6 @@ import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
 
 /// @title DeployMainnet
 /// @notice Mainnet deployment script. Uses real USDC (no MockUSDC).
-///         Does NOT deploy OnrampVaultFactory (deimplemented at server level — D6).
 ///         Reads admin and fee-recipient from environment so they can be set to a
 ///         Gnosis Safe multi-sig before going live (highly recommended).
 ///
