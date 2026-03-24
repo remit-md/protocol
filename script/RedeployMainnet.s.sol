@@ -37,9 +37,6 @@ contract RedeployMainnet is Script {
     address constant KEY_REGISTRY = 0xB08B61453EbDeB3BA341458bF067f29F93F7BF0F;
     address constant ROUTER_PROXY = 0xAf2e211BC585D3Ab37e9BD546Fb25747a09254D2;
 
-    // ── Already redeployed (2026-03-23, dispute removal) ────────────────
-    address constant BOUNTY = 0x6cf0570078c831440866ad60dd4ff43ef676f5bb;
-
     function run() external {
         address deployer = msg.sender;
         address admin = vm.envOr("GNOSIS_SAFE", deployer);

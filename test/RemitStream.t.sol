@@ -580,7 +580,6 @@ contract RemitStreamTest is Test {
     }
 
     function test_openStreamFor_revertsForUnauthorized() public {
-        address stranger = makeAddr("stranger");
         vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
         vm.prank(stranger);
         stream.openStreamFor(payer, STREAM_FOR, payee, RATE, MAX_TOTAL);
