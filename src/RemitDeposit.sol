@@ -270,6 +270,7 @@ contract RemitDeposit is IRemitDeposit, ReentrancyGuard {
     /// @param relayer The relayer address to authorize.
     function authorizeRelayer(address relayer) external {
         if (msg.sender != protocolAdmin) revert RemitErrors.Unauthorized(msg.sender);
+        if (relayer == address(0)) revert RemitErrors.ZeroAddress();
         _authorizedRelayers[relayer] = true;
         emit RemitEvents.RelayerAuthorized(relayer);
     }
