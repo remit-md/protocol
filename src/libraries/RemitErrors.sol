@@ -53,6 +53,7 @@ library RemitErrors {
 
     // V2: Streaming balance depletion
     error StreamTerminated(bytes32 streamId);
+    error StreamHealthy(bytes32 streamId);
 
     // V2: Bounty
     error BountyRejectionNoReason(bytes32 bountyId);

@@ -357,6 +357,9 @@ contract RemitStream is IRemitStream, ReentrancyGuard {
             emit RemitEvents.StreamBalanceWarning(
                 streamId, stream.payer, remaining, stream.ratePerSecond, secondsRemaining
             );
+        } else {
+            // Stream is healthy — nothing to settle, revert to save gas
+            revert RemitErrors.StreamHealthy(streamId);
         }
     }
 

@@ -78,6 +78,7 @@ library RemitTypes {
         bytes32 evidenceHash;
         uint8 milestoneCount;
         uint8 splitCount;
+        uint96 feesPaid; // cumulative fees paid across milestone releases (dust fix)
     }
 
     /// @notice Milestone within an escrow

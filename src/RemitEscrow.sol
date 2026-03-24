@@ -151,7 +151,8 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
             milestoneReleased: 0,
             evidenceHash: bytes32(0),
             milestoneCount: uint8(milestones.length),
-            splitCount: uint8(splits.length)
+            splitCount: uint8(splits.length),
+            feesPaid: 0
         });
 
         // Store milestones
@@ -241,7 +242,8 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
             milestoneReleased: 0,
             evidenceHash: bytes32(0),
             milestoneCount: uint8(milestones.length),
-            splitCount: uint8(splits.length)
+            splitCount: uint8(splits.length),
+            feesPaid: 0
         });
 
         for (uint256 i; i < milestones.length; ++i) {
@@ -347,12 +349,17 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
             revert RemitErrors.EscrowFrozen(invoiceId);
         }
 
+        // Validate milestone index if milestone escrow
+        if (escrow.milestoneCount > 0 && milestoneIndex >= escrow.milestoneCount) {
+            revert RemitErrors.EscrowNotFound(invoiceId);
+        }
+
         // --- Effects ---
         escrow.evidenceSubmitted = true;
         escrow.evidenceHash = evidenceHash;
 
         // Update milestone status if applicable
-        if (escrow.milestoneCount > 0 && milestoneIndex < escrow.milestoneCount) {
+        if (escrow.milestoneCount > 0) {
             _milestones[invoiceId][milestoneIndex].status = RemitTypes.MilestoneStatus.Submitted;
             _milestones[invoiceId][milestoneIndex].evidenceHash = evidenceHash;
         }
@@ -426,10 +433,6 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
         uint96 milestoneAmount = milestone.amount;
         address payee = escrow.payee;
 
-        // Proportional fee based on milestone amount relative to total
-        uint96 fee = uint96((uint256(escrow.feeAmount) * milestoneAmount) / escrow.amount);
-        uint96 net = milestoneAmount - fee;
-
         // --- Effects ---
         milestone.status = RemitTypes.MilestoneStatus.Released;
         escrow.milestoneReleased += milestoneAmount;
@@ -442,6 +445,17 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
                 break;
             }
         }
+
+        // Fee: proportional per milestone, last milestone gets remainder to avoid dust
+        uint96 fee;
+        if (allReleased) {
+            fee = escrow.feeAmount - escrow.feesPaid;
+        } else {
+            fee = uint96((uint256(escrow.feeAmount) * milestoneAmount) / escrow.amount);
+        }
+        escrow.feesPaid += fee;
+        uint96 net = milestoneAmount - fee;
+
         if (allReleased) {
             escrow.status = RemitTypes.EscrowStatus.Completed;
             feeCalculator.recordTransaction(escrow.payer, escrow.amount);
