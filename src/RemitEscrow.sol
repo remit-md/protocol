@@ -151,7 +151,8 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
             milestoneReleased: 0,
             evidenceHash: bytes32(0),
             milestoneCount: uint8(milestones.length),
-            splitCount: uint8(splits.length)
+            splitCount: uint8(splits.length),
+            feesPaid: 0
         });
 
         // Store milestones
@@ -241,7 +242,8 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
             milestoneReleased: 0,
             evidenceHash: bytes32(0),
             milestoneCount: uint8(milestones.length),
-            splitCount: uint8(splits.length)
+            splitCount: uint8(splits.length),
+            feesPaid: 0
         });
 
         for (uint256 i; i < milestones.length; ++i) {
