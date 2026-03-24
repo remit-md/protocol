@@ -2,8 +2,6 @@
 pragma solidity ^0.8.24;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-
 import {RemitEscrow} from "../src/RemitEscrow.sol";
 import {RemitTab} from "../src/RemitTab.sol";
 import {RemitStream} from "../src/RemitStream.sol";
