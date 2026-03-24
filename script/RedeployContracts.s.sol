@@ -9,6 +9,7 @@ import {RemitStream} from "../src/RemitStream.sol";
 import {RemitFeeCalculator} from "../src/RemitFeeCalculator.sol";
 import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
 import {RemitRouter} from "../src/RemitRouter.sol";
+
 /// @title RedeployContracts
 /// @notice Fix feeRecipient on contracts that were deployed with the deployer
 ///         address instead of the dedicated fee wallet.
