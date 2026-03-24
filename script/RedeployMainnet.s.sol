@@ -50,15 +50,9 @@ contract RedeployMainnet is Script {
 
         // 1. Deploy new immutable contracts — Safe is protocolAdmin
         //    Constructor arg order varies per contract — verified against source.
-        address newEscrow = address(
-            new RemitEscrow(USDC, FEE_CALC, admin, feeRecipient, KEY_REGISTRY)
-        );
-        address newTab = address(
-            new RemitTab(USDC, FEE_CALC, feeRecipient, admin, KEY_REGISTRY)
-        );
-        address newStream = address(
-            new RemitStream(USDC, FEE_CALC, feeRecipient, admin, KEY_REGISTRY)
-        );
+        address newEscrow = address(new RemitEscrow(USDC, FEE_CALC, admin, feeRecipient, KEY_REGISTRY));
+        address newTab = address(new RemitTab(USDC, FEE_CALC, feeRecipient, admin, KEY_REGISTRY));
+        address newStream = address(new RemitStream(USDC, FEE_CALC, feeRecipient, admin, KEY_REGISTRY));
         address newDeposit = address(new RemitDeposit(USDC, KEY_REGISTRY, admin));
 
         console2.log("New Escrow: ", newEscrow);
