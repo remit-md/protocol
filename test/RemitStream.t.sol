@@ -487,20 +487,15 @@ contract RemitStreamTest is Test {
         assertEq(s.closedAt, 0);
     }
 
-    function test_settle_healthyStream_noOpNoStateChange() public {
+    function test_settle_healthyStream_reverts() public {
         vm.prank(payer);
         stream.openStream(STREAM_ID, payee, RATE, MAX_TOTAL);
 
-        // After 100s: remaining = 35_000e6 >> 5*RATE (50e6) → no-op
+        // After 100s: remaining = 35_000e6 >> 5*RATE (50e6) → healthy, should revert
         vm.warp(block.timestamp + 100);
 
+        vm.expectRevert(abi.encodeWithSelector(RemitErrors.StreamHealthy.selector, STREAM_ID));
         stream.settle(STREAM_ID);
-
-        RemitTypes.Stream memory s = stream.getStream(STREAM_ID);
-        assertEq(uint8(s.status), uint8(RemitTypes.StreamStatus.Active));
-        assertEq(s.closedAt, 0);
-        assertEq(s.withdrawn, 0);
-        assertEq(usdc.balanceOf(address(stream)), MAX_TOTAL); // funds untouched
     }
 
     function test_settle_revert_notFound() public {
