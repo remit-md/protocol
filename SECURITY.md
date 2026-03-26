@@ -41,8 +41,6 @@ Upgrades require the `owner` address (multi-sig after mainnet launch).
 | Contract | Role |
 |----------|------|
 | `RemitKeyRegistry` | EIP-712 session key management |
-| `RemitArbitration` | Third-party arbitration routing (not launch scope) |
-| `RemitOnrampVault` | Fiat on-ramp buffer vaults |
 
 ---
 
@@ -65,9 +63,6 @@ All state-changing functions that interact with external contracts or move funds
 | Cancel / reclaim | Designated payer (within allowed window) |
 | Set fee rates | Protocol owner only |
 | Register session key | Wallet owner only |
-| Register arbitrator | Any wallet (with bond stake) |
-| Render arbitration decision | Assigned arbitrator only |
-| Admin arbitration fallback | Protocol owner only |
 | Upgrade proxy contracts | Protocol owner only |
 
 ### EIP-712 Authentication
@@ -84,22 +79,12 @@ Payments are protected by a 4-layer rate limit:
 1. IP-level rate limit (nginx)
 2. Wallet-level rate limit (server)
 3. Action-level rate limit (per payment type)
-4. Bond/stake requirement (arbitrators)
 
 ---
 
 ## Known Accepted Risks
 
-### PRNG Weakness in Arbitration (Low impact)
-
-The `RemitArbitration` contract uses `blockhash` and `block.timestamp` for arbitrator
-selection randomness. On Base L2, block hash manipulation is significantly harder than
-on Ethereum L1 because the sequencer (Coinbase/OP Labs) controls block production.
-
-**Accepted because:**
-- Arbitration is not in launch scope — dispute server routes are intentionally unimplemented
-- Impact: a miner/sequencer could bias arbitrator selection, not steal funds
-- Mitigated by: 3-candidate selection with payer/payee strike rights (each party can reject 1 arbitrator)
+No known accepted risks at this time.
 
 ---
 
@@ -109,9 +94,9 @@ Two internal security reviews were conducted before external audit engagement.
 
 ### V1 Internal Review (2026-03-08)
 
-Findings: **0 critical, 0 high, 1 medium (accepted)**
+Findings: **0 critical, 0 high, 0 medium**
 
-The medium finding was the PRNG weakness in `RemitArbitration` described above.
+Original medium finding (PRNG in `RemitArbitration`) is no longer applicable — contract was removed.
 
 ### V2 Internal Review (2026-03-09)
 
@@ -120,10 +105,7 @@ Focused on access control gaps and code quality. Findings resolved:
 | ID | Severity | Description | Status |
 |----|----------|-------------|--------|
 | KR-L-01 | Low | `deauthorizeContract()` missing from KeyRegistry | Fixed |
-| AR-L-02 | Low | `deauthorizeEscrow()` missing from Arbitration | Fixed |
-| G-L-01 | Low | Same as above (governance gap) | Fixed |
 | KR-I-02 | Low | No `allowedModelsBitmap != 0` check in `delegateKey()` | Fixed |
-| AR-I-03 | Info | Reputation update conditions hard to read | Refactored |
 
 ---
 
@@ -136,12 +118,12 @@ Focused on access control gaps and code quality. Findings resolved:
 
 | Severity | Raw | False Positives | Real | Status |
 |----------|-----|-----------------|------|--------|
-| High | 2 | 0 | 2 | Accepted (PRNG — documented above) |
-| Medium | ~8 | ~7 | 1 | Fixed (OnrampVaultFactory CEI violation) |
+| High | 2 | 0 | 2 | N/A — both in `RemitArbitration` (removed) |
+| Medium | ~8 | ~7 | 1 | N/A — in `OnrampVaultFactory` (removed) |
 | Low | ~20 | ~20 | 0 | All false positives |
 | Info | ~50 | ~50 | 0 | Standard patterns |
 
-**Real findings resolved:** 1 fixed, 1 accepted.
+**All real findings were in contracts that have since been removed from the codebase.** Zero unresolved findings in current source.
 
 ---
 
@@ -222,7 +204,7 @@ If you discover a security vulnerability in the Remit protocol contracts, please
 - Documentation and configuration files
 - Issues in third-party dependencies (report to the upstream project)
 - Informational findings from automated scanners without proven exploitability
-- Theoretical risks accepted in this document (PRNG in arbitration)
+- Theoretical risks explicitly accepted in this document
 - Gas optimization suggestions (use regular issues)
 
 **Please do not:** open public GitHub issues for security vulnerabilities, post on social media,
@@ -255,4 +237,4 @@ protocol's normal operation, and report findings promptly.
 
 ---
 
-*Last updated: 2026-03-21*
+*Last updated: 2026-03-26*
