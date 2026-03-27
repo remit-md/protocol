@@ -14,7 +14,7 @@ import {RemitKeyValidator} from "./libraries/RemitKeyValidator.sol";
 
 /// @title RemitDeposit
 /// @notice Refundable USDC deposits / collateral for AI agent service agreements
-/// @dev Fund-holding contract. IMMUTABLE — no proxy, no upgrade path.
+/// @dev Fund-holding contract. IMMUTABLE - no proxy, no upgrade path.
 ///      Depositor locks USDC as collateral with a provider and expiry.
 ///      Provider returns (full refund) or forfeits (provider keeps funds).
 ///      Depositor can claim after expiry if neither party has settled.
@@ -30,7 +30,7 @@ contract RemitDeposit is IRemitDeposit, ReentrancyGuard {
     IERC20 public immutable usdc;
     /// @dev V2: Session key registry. address(0) = key management not enabled.
     IRemitKeyRegistry public immutable keyRegistry;
-    /// @dev Protocol admin — can authorize/revoke relayers.
+    /// @dev Protocol admin - can authorize/revoke relayers.
     address public immutable protocolAdmin;
 
     // =========================================================================

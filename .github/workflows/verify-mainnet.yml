@@ -9,7 +9,7 @@ on:
 
 # Verifies all contracts deployed by DeployMainnet.s.sol on Base mainnet (chain 8453).
 #
-# Uses Blockscout (base.blockscout.com) — free, no API key, supports Base mainnet natively.
+# Uses Blockscout (base.blockscout.com) - free, no API key, supports Base mainnet natively.
 #
 # NOTE: Basescan (basescan.org) verification requires a paid Etherscan plan for Base mainnet
 # (the Etherscan V2 unified API charges per-chain for non-Ethereum chains). Blockscout is the
@@ -43,7 +43,7 @@ jobs:
         env:
           RPC_URL: ${{ secrets.ALCHEMY_BASE_MAINNET_URL }}
         run: |
-          set +e  # Don't abort on first failure — verify all, report at end
+          set +e  # Don't abort on first failure - verify all, report at end
 
           # Blockscout: free, no API key, supports Base mainnet
           # https://base.blockscout.com

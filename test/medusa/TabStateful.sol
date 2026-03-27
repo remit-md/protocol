@@ -7,11 +7,11 @@ import {RemitTab} from "../../src/RemitTab.sol";
 import {RemitTypes} from "../../src/libraries/RemitTypes.sol";
 
 // =============================================================================
-// TabStateful — Medusa stateful fuzz campaign for RemitTab (Campaign 2.3)
+// TabStateful - Medusa stateful fuzz campaign for RemitTab (Campaign 2.3)
 //
 // Tests multi-step sequences:
 //   openTab → closeTab (with charges)
-//   openTab → closeTab (zero charges — full refund)
+//   openTab → closeTab (zero charges - full refund)
 //   openTab → closeExpiredTab (after expiry, no sig needed for zero charges)
 //
 // Invariants under test (from INVARIANTS.md):
@@ -44,7 +44,7 @@ contract TabStateful {
     address internal constant ADMIN = address(0xAD00);
     address internal constant FEE_WALLET = address(0xFEE00);
 
-    // Deterministic provider key — used to sign TabCharge attestations.
+    // Deterministic provider key - used to sign TabCharge attestations.
     // Any non-zero value well below secp256k1 order is valid.
     uint256 internal constant PROVIDER_KEY = 0x1234567890123456789012345678901234567890123456789012345678901234;
     address internal immutable PROVIDER;

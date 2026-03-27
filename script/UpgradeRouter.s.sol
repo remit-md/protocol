@@ -13,7 +13,7 @@ import {RemitRouter} from "../src/RemitRouter.sol";
 ///        --broadcast --rpc-url $ALCHEMY_BASE_SEPOLIA_URL --private-key $DEPLOYER_PRIVATE_KEY
 ///
 ///      Storage layout: one new mapping added (_authorizedRelayers), gap reduced 50→49.
-///      Existing storage slots unchanged — safe for UUPS upgrade.
+///      Existing storage slots unchanged - safe for UUPS upgrade.
 contract UpgradeRouter is Script {
     /// @dev Current Router proxy address (Base Sepolia).
     address constant ROUTER_PROXY = 0x3120F396fF6A9aFc5a9D92e28796082F1429e024;

@@ -37,7 +37,7 @@ contract RemitBountyFuzzTest is Test {
     }
 
     // =========================================================================
-    // Fuzz: awardBounty — all funds accounted for
+    // Fuzz: awardBounty - all funds accounted for
     // =========================================================================
 
     /// @dev After award: winnerGets + fee = amount; bond returned to winner.
@@ -80,7 +80,7 @@ contract RemitBountyFuzzTest is Test {
     }
 
     // =========================================================================
-    // Fuzz: reclaimBounty — poster gets full amount back (no fee)
+    // Fuzz: reclaimBounty - poster gets full amount back (no fee)
     // =========================================================================
 
     /// @dev When deadline passes with no submission, poster gets exact amount back.
@@ -107,7 +107,7 @@ contract RemitBountyFuzzTest is Test {
     }
 
     // =========================================================================
-    // Fuzz: fee safety cap — fee never exceeds bounty amount
+    // Fuzz: fee safety cap - fee never exceeds bounty amount
     // =========================================================================
 
     /// @dev MockFeeCalculator charges 1%. Fee must never exceed amount.
@@ -144,7 +144,7 @@ contract RemitBountyFuzzTest is Test {
         // Contract holds exactly amountA + amountB
         assertEq(usdc.balanceOf(address(bounty)), uint256(amountA) + uint256(amountB));
 
-        // Reclaim A — B should be unaffected
+        // Reclaim A - B should be unaffected
         vm.warp(block.timestamp + DEADLINE_DELTA + 1);
         vm.prank(poster);
         bounty.reclaimBounty(idA);

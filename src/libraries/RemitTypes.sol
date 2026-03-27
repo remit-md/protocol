@@ -141,7 +141,7 @@ library RemitTypes {
         DepositStatus status;
     }
 
-    /// @notice Fee tiers — cliff model (not marginal)
+    /// @notice Fee tiers - cliff model (not marginal)
     uint96 constant FEE_RATE_BPS = 100; // 1% total (below $10k/month spend)
     uint96 constant FEE_RATE_PREFERRED_BPS = 50; // 0.5% total (above $10k/month spend cliff)
     uint96 constant FEE_THRESHOLD = 10_000e6; // $10,000 monthly spend cliff (USDC, 6 decimals)

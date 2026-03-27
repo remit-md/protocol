@@ -19,9 +19,9 @@ import {RemitKeyRegistry} from "../src/RemitKeyRegistry.sol";
 ///      forge script script/Deploy.s.sol --broadcast --rpc-url $RPC_URL
 ///
 ///      Required env vars:
-///        PROTOCOL_ADMIN   — address that approves upgrades
-///        FEE_RECIPIENT    — address that receives protocol fees
-///        USDC_ADDRESS     — USDC token address on target chain
+///        PROTOCOL_ADMIN   - address that approves upgrades
+///        FEE_RECIPIENT    - address that receives protocol fees
+///        USDC_ADDRESS     - USDC token address on target chain
 ///
 ///      The deployer account (--account or --private-key) becomes the initial
 ///      owner of both UUPS proxies and must call transferOwnership afterwards if needed.

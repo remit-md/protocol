@@ -15,7 +15,7 @@ import {RemitKeyValidator} from "./libraries/RemitKeyValidator.sol";
 
 /// @title RemitStream
 /// @notice Lockup-linear streaming payments for AI agent services
-/// @dev Fund-holding contract. IMMUTABLE — no proxy, no upgrade path.
+/// @dev Fund-holding contract. IMMUTABLE - no proxy, no upgrade path.
 ///      Payer locks maxTotal USDC upfront. Payee withdraws accrued funds on demand.
 ///      Fee is charged on the pending (non-withdrawn) amount at close time only.
 ///      CEI pattern enforced. ReentrancyGuard on all fund-moving functions.
@@ -330,7 +330,7 @@ contract RemitStream is IRemitStream, ReentrancyGuard {
         uint96 remaining = stream.maxTotal - totalStreamed;
 
         if (remaining == 0) {
-            // Stream has exhausted its locked funds — auto-terminate and pay out
+            // Stream has exhausted its locked funds - auto-terminate and pay out
             uint96 pending = totalStreamed - stream.withdrawn;
             uint96 fee = 0;
             uint96 payeeGets = pending;
@@ -352,13 +352,13 @@ contract RemitStream is IRemitStream, ReentrancyGuard {
                 streamId, stream.payer, stream.payee, totalStreamed, fee
             );
         } else if (remaining < uint96(stream.ratePerSecond) * 5) {
-            // Less than 5 seconds of runway — warn
+            // Less than 5 seconds of runway - warn
             uint64 secondsRemaining = uint64(remaining / stream.ratePerSecond);
             emit RemitEvents.StreamBalanceWarning(
                 streamId, stream.payer, remaining, stream.ratePerSecond, secondsRemaining
             );
         } else {
-            // Stream is healthy — nothing to settle, revert to save gas
+            // Stream is healthy - nothing to settle, revert to save gas
             revert RemitErrors.StreamHealthy(streamId);
         }
     }
@@ -370,7 +370,7 @@ contract RemitStream is IRemitStream, ReentrancyGuard {
         return totalStreamed - stream.withdrawn;
     }
 
-    /// @dev min(rate * elapsed, cap) — overflow-safe via uint256 intermediate
+    /// @dev min(rate * elapsed, cap) - overflow-safe via uint256 intermediate
     function _cappedStream(uint64 rate, uint64 elapsed, uint96 cap) internal pure returns (uint96) {
         uint256 streamed = uint256(rate) * uint256(elapsed);
         return streamed >= uint256(cap) ? cap : uint96(streamed);

@@ -8,13 +8,13 @@ import {RemitTab} from "../../src/RemitTab.sol";
 import {RemitTypes} from "../../src/libraries/RemitTypes.sol";
 
 // =============================================================================
-// CrossContractStateful — Medusa stateful fuzz (Campaign 2.4)
+// CrossContractStateful - Medusa stateful fuzz (Campaign 2.4)
 //
 // Exercises Escrow + Tab simultaneously with SHARED USDC and fee calculator.
 // Key cross-contract invariant: neither contract can steal from the other.
 //
 // Sequences tested:
-//   Interleaved Escrow and Tab operations — random ordering
+//   Interleaved Escrow and Tab operations - random ordering
 //
 // Invariants under test:
 //   INV-CC1: usdc.balanceOf(escrow) == ghost_escrowBalance  (no escrow leakage)
@@ -53,7 +53,7 @@ contract CrossContractStateful {
     bytes32 internal constant TAB_CHARGE_TYPEHASH =
         keccak256("TabCharge(bytes32 tabId,uint96 totalCharged,uint32 callCount)");
 
-    // ── Ghost accounting — independent per contract ───────────────────────────
+    // ── Ghost accounting - independent per contract ───────────────────────────
 
     uint256 internal ghost_escrowBalance;
     uint256 internal ghost_tabBalance;

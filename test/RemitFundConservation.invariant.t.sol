@@ -208,7 +208,7 @@ contract BountyHandler is Test {
         vm.prank(submitter);
         bounty.submitBounty(id, keccak256(abi.encodePacked("evidence", id)));
 
-        // Move to claimed (no bond to track — bond=0)
+        // Move to claimed (no bond to track - bond=0)
         _claimedIds.push(id);
         _removeOpenAt(idx);
     }
@@ -325,7 +325,7 @@ contract StreamHandler is Test {
     mapping(bytes32 => uint64) internal _rate;
     uint256 internal _idCounter;
 
-    /// @dev Ghost variables tracking fund flows (excludes fees — feeCalc is 1%).
+    /// @dev Ghost variables tracking fund flows (excludes fees - feeCalc is 1%).
     uint256 public ghost_deposited;
     uint256 public ghost_withdrawn; // payee withdrawals (before fee)
     uint256 public ghost_fees;
@@ -372,7 +372,7 @@ contract StreamHandler is Test {
         // ghost_withdrawn + ghost_fees tracks what went OUT of this stream.
         uint256 released = contractBefore - usdc.balanceOf(address(stream));
         // MockFeeCalculator uses 1% fee on the PENDING portion only.
-        // We just track total outflow without splitting — invariant uses totals.
+        // We just track total outflow without splitting - invariant uses totals.
         ghost_withdrawn += released;
 
         _removeAt(idx);

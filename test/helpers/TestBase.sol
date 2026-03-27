@@ -22,12 +22,12 @@ import {RemitTypes} from "../../src/libraries/RemitTypes.sol";
 ///      MOCK STACK (unit tests):
 ///        `usdc`, `feeCalc` (MockFeeCalculator), `escrow`, `tabContract`,
 ///        `streamContract`, `bountyContract`, `depositContract`
-///        — predictable 1% fee, no volume tracking.
+///        - predictable 1% fee, no volume tracking.
 ///
 ///      REAL STACK (integration tests):
 ///        `realFeeCalc` (UUPS proxy), `router` (UUPS proxy), `realEscrow`,
 ///        `realTab`, `realStream`, `realBounty`, `realDeposit`
-///        — real cliff-based fee tiers, all contracts authorized.
+///        - real cliff-based fee tiers, all contracts authorized.
 ///
 ///      RemitEscrow.t.sol inherits this and uses the mock stack (backward-compat).
 ///      Integration.t.sol inherits this and uses the real stack.

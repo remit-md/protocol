@@ -17,8 +17,8 @@ import {RemitKeyValidator} from "./libraries/RemitKeyValidator.sol";
 
 /// @title RemitRouter
 /// @notice Entry point for AI agents. Stores current contract addresses and provides
-///         payDirect — a convenience function for simple payments without escrow.
-/// @dev UPGRADEABLE via UUPS proxy. Does NOT hold funds — all funds flow through
+///         payDirect - a convenience function for simple payments without escrow.
+/// @dev UPGRADEABLE via UUPS proxy. Does NOT hold funds - all funds flow through
 ///      the individual protocol contracts (Escrow, Tab, Stream, Bounty, Deposit).
 ///      Updating contract addresses here doesn't affect in-flight payments (those
 ///      are locked in the individual contracts until settlement).
@@ -57,7 +57,7 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     mapping(address => bool) private _authorizedRelayers;
 
     // =========================================================================
-    // Constructor — disables direct initialization of implementation contract
+    // Constructor - disables direct initialization of implementation contract
     // =========================================================================
 
     constructor() {
@@ -109,7 +109,7 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     }
 
     // =========================================================================
-    // IRemitRouter — payDirect
+    // IRemitRouter - payDirect
     // =========================================================================
 
     /// @inheritdoc IRemitRouter
@@ -168,7 +168,7 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     }
 
     // =========================================================================
-    // IRemitRouter — payDirectFor / payPerRequestFor (relayer-submitted)
+    // IRemitRouter - payDirectFor / payPerRequestFor (relayer-submitted)
     // =========================================================================
 
     /// @inheritdoc IRemitRouter
@@ -238,7 +238,7 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
     }
 
     // =========================================================================
-    // IRemitRouter — settleX402 (EIP-3009 routed x402 payment)
+    // IRemitRouter - settleX402 (EIP-3009 routed x402 payment)
     // =========================================================================
 
     /// @inheritdoc IRemitRouter
@@ -289,14 +289,14 @@ contract RemitRouter is IRemitRouter, UUPSUpgradeable, ReentrancyGuard {
             IERC20(usdc).safeTransfer(feeRecipient, fee);
         }
 
-        // Record volume for cliff calculation (done after transfers — no re-entrancy risk here).
+        // Record volume for cliff calculation (done after transfers - no re-entrancy risk here).
         IRemitFeeCalculator(feeCalculator).recordTransaction(from, amount);
 
         emit RemitEvents.X402Payment(from, recipient, amount, fee, nonce);
     }
 
     // =========================================================================
-    // IRemitRouter — setters (onlyOwner)
+    // IRemitRouter - setters (onlyOwner)
     // =========================================================================
 
     /// @inheritdoc IRemitRouter

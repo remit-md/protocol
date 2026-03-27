@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# codegen.sh — Generate typed code from shared definitions
+# codegen.sh - Generate typed code from shared definitions
 # Generates Rust types from shared/errors.ts, events.ts, types.ts
 # Generates Python/TS SDK stubs from shared/openapi.yaml
 # Extracts ABIs from compiled contracts
@@ -34,7 +34,7 @@ if [ -d "$CONTRACTS_OUT" ]; then
         fi
     done
 else
-    warn "No contracts/out directory — run: cd packages/contracts && forge build"
+    warn "No contracts/out directory - run: cd packages/contracts && forge build"
 fi
 
 # 2. Generate OpenAPI server stubs (requires openapi-generator-cli or similar)

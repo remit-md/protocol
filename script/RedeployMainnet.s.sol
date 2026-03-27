@@ -15,7 +15,7 @@ import {RemitRouter} from "../src/RemitRouter.sol";
 /// @dev TWO-STEP DEPLOY:
 ///
 ///   Step 1 (CI): This script deploys 4 new immutable contracts + 1 new Router
-///     implementation. It does NOT wire anything — the Safe owns FeeCalc,
+///     implementation. It does NOT wire anything - the Safe owns FeeCalc,
 ///     KeyRegistry, and Router, so only the Safe can do the wiring.
 ///
 ///   Step 2 (MetaMask): Open authorize-redeploy-mainnet.html, connect the Safe
@@ -48,8 +48,8 @@ contract RedeployMainnet is Script {
 
         vm.startBroadcast();
 
-        // 1. Deploy new immutable contracts — Safe is protocolAdmin
-        //    Constructor arg order varies per contract — verified against source.
+        // 1. Deploy new immutable contracts - Safe is protocolAdmin
+        //    Constructor arg order varies per contract - verified against source.
         address newEscrow = address(new RemitEscrow(USDC, FEE_CALC, admin, feeRecipient, KEY_REGISTRY));
         address newTab = address(new RemitTab(USDC, FEE_CALC, feeRecipient, admin, KEY_REGISTRY));
         address newStream = address(new RemitStream(USDC, FEE_CALC, feeRecipient, admin, KEY_REGISTRY));

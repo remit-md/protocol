@@ -229,7 +229,7 @@ contract RemitStreamTest is Test {
     function test_withdraw_revert_nothingAccrued() public {
         vm.prank(payer);
         stream.openStream(STREAM_ID, payee, RATE, MAX_TOTAL);
-        // No time elapsed — nothing accrued yet
+        // No time elapsed - nothing accrued yet
         vm.prank(payee);
         vm.expectRevert(RemitErrors.ZeroAmount.selector);
         stream.withdraw(STREAM_ID);

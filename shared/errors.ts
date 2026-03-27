@@ -185,12 +185,12 @@ export const ERROR_METADATA: Record<ErrorCode, ErrorMetadata> = {
   [ErrorCode.CANCEL_BLOCKED_CLAIM_START]: {
     code: ErrorCode.CANCEL_BLOCKED_CLAIM_START,
     httpStatus: 409,
-    message: "Cannot unilaterally cancel — payee has called CLAIM_START.",
+    message: "Cannot unilaterally cancel - payee has called CLAIM_START.",
   },
   [ErrorCode.CANCEL_BLOCKED_EVIDENCE]: {
     code: ErrorCode.CANCEL_BLOCKED_EVIDENCE,
     httpStatus: 409,
-    message: "Cannot cancel — evidence has been submitted.",
+    message: "Cannot cancel - evidence has been submitted.",
   },
   [ErrorCode.VERSION_MISMATCH]: {
     code: ErrorCode.VERSION_MISMATCH,

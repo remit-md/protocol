@@ -74,7 +74,7 @@ contract MockUSDCPermitTest is Test {
         uint256 deadline = block.timestamp - 1;
 
         (uint8 v, bytes32 r, bytes32 s) = _signPermit(value, deadline + 2); // sign with valid deadline
-        // Call with expired deadline — the sig won't match anyway
+        // Call with expired deadline - the sig won't match anyway
         vm.expectRevert("MockUSDC: permit expired");
         usdc.permit(owner, spender, value, deadline, v, r, s);
     }
@@ -101,7 +101,7 @@ contract MockUSDCPermitTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = _signPermit(value, deadline);
         usdc.permit(owner, spender, value, deadline, v, r, s);
 
-        // Same signature replayed — nonce incremented so sig is invalid
+        // Same signature replayed - nonce incremented so sig is invalid
         vm.expectRevert("MockUSDC: invalid permit signature");
         usdc.permit(owner, spender, value, deadline, v, r, s);
     }

@@ -14,8 +14,8 @@ import {RemitEvents} from "./libraries/RemitEvents.sol";
 ///      fee logic. Fund-holding contracts (Escrow, Tab, Stream, Bounty) are immutable.
 ///
 ///      Fee tiers (in basis points, 10000 = 100%):
-///        Standard  : 100 bps (1.00%) — monthly spend volume < $10,000 USDC
-///        Preferred : 50 bps  (0.50%) — monthly spend volume >= $10,000 USDC
+///        Standard  : 100 bps (1.00%) - monthly spend volume < $10,000 USDC
+///        Preferred : 50 bps  (0.50%) - monthly spend volume >= $10,000 USDC
 ///
 ///      Cliff: once a wallet's cumulative spend crosses $10,000 in a calendar month,
 ///      ALL subsequent transactions that month are charged at 50 bps. No marginal split.
@@ -26,7 +26,7 @@ import {RemitEvents} from "./libraries/RemitEvents.sol";
 ///      dependency) so we only need openzeppelin/contracts (non-upgradeable package).
 contract RemitFeeCalculator is IRemitFeeCalculator, UUPSUpgradeable {
     // =========================================================================
-    // Storage (proxy-safe layout — slots 0+ are used by proxy context)
+    // Storage (proxy-safe layout - slots 0+ are used by proxy context)
     // =========================================================================
 
     /// @dev Guard to prevent double-initialization. Set to true in constructor
@@ -36,7 +36,7 @@ contract RemitFeeCalculator is IRemitFeeCalculator, UUPSUpgradeable {
     /// @dev Contract owner (can upgrade and authorize callers).
     address private _owner;
 
-    /// @dev Monthly volume per wallet (raw, may be from a stale month — use _getCurrentVolume).
+    /// @dev Monthly volume per wallet (raw, may be from a stale month - use _getCurrentVolume).
     mapping(address => uint256) public monthlyVolume;
 
     /// @dev Calendar month key at which this wallet's volume was last set.
@@ -47,7 +47,7 @@ contract RemitFeeCalculator is IRemitFeeCalculator, UUPSUpgradeable {
     mapping(address => bool) public authorizedCallers;
 
     // =========================================================================
-    // Constructor — disables direct initialization of implementation contract
+    // Constructor - disables direct initialization of implementation contract
     // =========================================================================
 
     constructor() {
@@ -58,7 +58,7 @@ contract RemitFeeCalculator is IRemitFeeCalculator, UUPSUpgradeable {
     }
 
     // =========================================================================
-    // Initializer — called once through the proxy during deployment
+    // Initializer - called once through the proxy during deployment
     // =========================================================================
 
     /// @notice Initialize the fee calculator (proxy deployment only).
@@ -90,7 +90,7 @@ contract RemitFeeCalculator is IRemitFeeCalculator, UUPSUpgradeable {
 
     /// @inheritdoc IRemitFeeCalculator
     /// @dev Cliff-based: once monthly volume >= $10k, preferred rate applies to the ENTIRE
-    ///      transaction. No marginal split — the transaction that pushes you past $10k is
+    ///      transaction. No marginal split - the transaction that pushes you past $10k is
     ///      still charged at standard rate; the NEXT transaction gets preferred.
     function calculateFee(address wallet, uint96 amount) external view override returns (uint96 fee) {
         if (_getCurrentVolume(wallet) >= RemitTypes.FEE_THRESHOLD) {

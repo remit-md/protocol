@@ -10,7 +10,7 @@ interface IRemitEscrow {
     /// @notice Create and fund an escrow for a task
     /// @param invoiceId Unique invoice identifier (keccak256 of invoice JSON)
     /// @param payee Address of the payee agent
-    /// @param amount USDC amount (6 decimals) — must be >= MIN_AMOUNT
+    /// @param amount USDC amount (6 decimals) - must be >= MIN_AMOUNT
     /// @param timeout Unix timestamp when escrow expires
     /// @param milestones Array of milestone definitions (empty for single-release)
     /// @param splits Array of payment splits (empty for single payee)

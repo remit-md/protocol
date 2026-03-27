@@ -15,7 +15,7 @@ import {RemitKeyValidator} from "./libraries/RemitKeyValidator.sol";
 
 /// @title RemitBounty
 /// @notice Open bounty system for AI agent task completion
-/// @dev Fund-holding contract. IMMUTABLE — no proxy, no upgrade path.
+/// @dev Fund-holding contract. IMMUTABLE - no proxy, no upgrade path.
 ///      Poster locks USDC. Submitter bonds and transitions status to Claimed.
 ///      Poster awards (bond returned to winner) or rejects (bond returned to submitter, bounty re-opens).
 ///      Only one active submission at a time. CEI enforced throughout.
@@ -258,7 +258,7 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
 
         // --- Interactions ---
         usdc.safeTransfer(bounty.poster, bounty.amount);
-        // Return bond to pending submitter — they submitted in good faith before deadline
+        // Return bond to pending submitter - they submitted in good faith before deadline
         if (bond > 0) usdc.safeTransfer(pendingSubmitter, bond);
 
         emit RemitEvents.BountyExpired(bountyId, bounty.amount);
@@ -270,7 +270,7 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
 
     /// @notice Post a bounty on behalf of `poster` (server relayer pattern).
     /// @dev Only callable by an authorized relayer. Pulls USDC from `poster`, who must have
-    ///      pre-approved this contract. Records `poster` as the on-chain bounty owner —
+    ///      pre-approved this contract. Records `poster` as the on-chain bounty owner -
     ///      not the relayer. All subsequent award/reclaim checks compare against `poster`.
     ///      CEI: validate → update state → pull USDC from poster.
     /// @param poster   The real bounty poster whose USDC is at stake
@@ -312,7 +312,7 @@ contract RemitBounty is IRemitBounty, ReentrancyGuard {
         });
 
         // --- Interactions ---
-        // Pull from poster (not relayer) — poster must have approved this contract
+        // Pull from poster (not relayer) - poster must have approved this contract
         usdc.safeTransferFrom(poster, address(this), amount);
 
         emit RemitEvents.BountyPosted(bountyId, poster, amount, deadline, taskHash);

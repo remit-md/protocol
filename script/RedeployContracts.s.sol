@@ -25,7 +25,7 @@ import {RemitRouter} from "../src/RemitRouter.sol";
 ///        --rpc-url $ALCHEMY_BASE_SEPOLIA_URL \
 ///        --private-key $DEPLOYER_PRIVATE_KEY
 contract RedeployContracts is Script {
-    // ---- Infrastructure (do NOT redeploy — proxies or shared contracts) ----
+    // ---- Infrastructure (do NOT redeploy - proxies or shared contracts) ----
     address constant USDC = 0x2D846325766921935f37d5b4478196d3EF93707C;
     address constant FEE_CALC = 0xCCe1B8cEE59f860578Bed3C05FE2A80EEa04aAfB;
     address constant KEY_REGISTRY = 0xF5Ba0BAA124885EB88aD225e81A60864d5E43074;
@@ -47,7 +47,7 @@ contract RedeployContracts is Script {
         vm.startBroadcast();
 
         // 1. Redeploy fund-holding contracts with correct feeRecipient
-        //    Constructor arg order matters — verified against source:
+        //    Constructor arg order matters - verified against source:
         //      Escrow:  (usdc, feeCalc, protocolAdmin, feeRecipient, keyRegistry)
         //      Tab:     (usdc, feeCalc, feeRecipient, protocolAdmin, keyRegistry)
         //      Stream:  (usdc, feeCalc, feeRecipient, protocolAdmin, keyRegistry)

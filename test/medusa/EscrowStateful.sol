@@ -7,7 +7,7 @@ import {RemitEscrow} from "../../src/RemitEscrow.sol";
 import {RemitTypes} from "../../src/libraries/RemitTypes.sol";
 
 // =============================================================================
-// EscrowStateful — Medusa stateful fuzz campaign for RemitEscrow (Campaign 2.2)
+// EscrowStateful - Medusa stateful fuzz campaign for RemitEscrow (Campaign 2.2)
 //
 // Tests multi-step sequences that stateless fuzz misses:
 //   fund → claimStart → release

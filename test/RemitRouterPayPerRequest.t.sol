@@ -95,7 +95,7 @@ contract RemitRouterPayPerRequestTest is Test {
 
         // Verify the event was emitted (event checking covers endpoint in data)
         // We already test exact emit above; here we confirm endpoint in raw logs
-        vm.getRecordedLogs(); // logs captured — presence of PayPerRequest event confirmed
+        vm.getRecordedLogs(); // logs captured - presence of PayPerRequest event confirmed
     }
 
     // =========================================================================

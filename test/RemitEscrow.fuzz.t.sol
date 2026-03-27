@@ -11,7 +11,7 @@ import {RemitErrors} from "../src/libraries/RemitErrors.sol";
 /// @notice Fuzz tests for RemitEscrow.sol invariants
 contract RemitEscrowFuzzTest is TestBase {
     // =========================================================================
-    // Fuzz: createEscrow — amount bounds
+    // Fuzz: createEscrow - amount bounds
     // =========================================================================
 
     /// @dev Fee is never greater than the amount; fee + payout == amount
@@ -48,7 +48,7 @@ contract RemitEscrowFuzzTest is TestBase {
         uint256 payeeGain = usdc.balanceOf(payee) - payeeBefore;
         uint256 feeGain = usdc.balanceOf(feeRecipient) - feeBefore;
 
-        // Invariant: all funds accounted for — no dust lost
+        // Invariant: all funds accounted for - no dust lost
         assertEq(payeeGain + feeGain, contractBefore, "funds not conserved");
         // Invariant: fee never exceeds amount
         assertLe(feeGain, amount, "fee exceeds amount");
@@ -175,7 +175,7 @@ contract RemitEscrowFuzzTest is TestBase {
     }
 
     // =========================================================================
-    // Fuzz: state machine — no invalid transitions
+    // Fuzz: state machine - no invalid transitions
     // =========================================================================
 
     /// @dev Completed escrows cannot be re-released or cancelled

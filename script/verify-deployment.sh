@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify-deployment.sh — Post-deployment verification for DeployMainnet.s.sol
+# verify-deployment.sh - Post-deployment verification for DeployMainnet.s.sol
 #
 # Reads deployed addresses from the Foundry broadcast file and verifies:
 #   1. All contracts have code at their address
@@ -14,8 +14,8 @@
 #   ./script/verify-deployment.sh [RPC_URL]
 #
 # Environment:
-#   GNOSIS_SAFE  — expected admin/owner address (optional, enables ownership checks)
-#   FEE_WALLET   — expected fee recipient address (optional, defaults to GNOSIS_SAFE)
+#   GNOSIS_SAFE  - expected admin/owner address (optional, enables ownership checks)
+#   FEE_WALLET   - expected fee recipient address (optional, defaults to GNOSIS_SAFE)
 
 set -euo pipefail
 
@@ -39,7 +39,7 @@ fi
 
 # ---------------------------------------------------------------------------
 # Address extraction from broadcast JSON
-# Filter CREATE transactions only — CALL transactions also have contractAddress
+# Filter CREATE transactions only - CALL transactions also have contractAddress
 # set (it's the callee address, not a newly created contract).
 # ---------------------------------------------------------------------------
 get_address() {

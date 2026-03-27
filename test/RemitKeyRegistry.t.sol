@@ -10,7 +10,7 @@ import {RemitErrors} from "../src/libraries/RemitErrors.sol";
 import {RemitEvents} from "../src/libraries/RemitEvents.sol";
 
 /// @title RemitKeyRegistryTest
-/// @notice Unit tests for Phase 2 — Key Management (RemitKeyRegistry)
+/// @notice Unit tests for Phase 2 - Key Management (RemitKeyRegistry)
 contract RemitKeyRegistryTest is Test {
     RemitKeyRegistry public registry;
 
@@ -214,7 +214,7 @@ contract RemitKeyRegistryTest is Test {
     function test_delegateKey_revert_expiredExpiry() public {
         // Warp to a known non-zero timestamp so block.timestamp - 1 != 0
         vm.warp(10_000);
-        uint64 expiredTime = uint64(block.timestamp - 1); // 9,999 — clearly in the past
+        uint64 expiredTime = uint64(block.timestamp - 1); // 9,999 - clearly in the past
         uint256 nonce = registry.getNonce(master1);
         bytes memory sig =
             _signDelegation(masterKey1, master1, session1, SPEND_LIMIT, DAILY_LIMIT, ALLOWED_ALL, expiredTime, nonce);
@@ -351,7 +351,7 @@ contract RemitKeyRegistryTest is Test {
         // New key is valid
         assertTrue(registry.isValidDelegation(session2));
 
-        // Old key is revoked but within grace period — should still be valid
+        // Old key is revoked but within grace period - should still be valid
         IRemitKeyRegistry.Delegation memory d1 = registry.getDelegation(session1);
         assertTrue(d1.revoked);
         assertGt(d1.gracePeriodEnds, block.timestamp);
@@ -530,10 +530,10 @@ contract RemitKeyRegistryTest is Test {
 
     function test_recordSpend_masterKey_noOp() public {
         // If session key has no delegation record, recordSpend is a no-op
-        // (master keys don't have delegation records — they're never tracked)
+        // (master keys don't have delegation records - they're never tracked)
         vm.prank(authorizedContract);
         registry.recordSpend(master1, 1_000_000e6); // would exceed any limit if tracking
-        // No revert — master keys have no limits
+        // No revert - master keys have no limits
     }
 
     // =========================================================================
@@ -750,7 +750,7 @@ contract RemitKeyRegistryTest is Test {
         // Advance to next day
         vm.warp(block.timestamp + 1 days + 1 seconds);
 
-        // Daily limit resets — can spend full daily limit again
+        // Daily limit resets - can spend full daily limit again
         assertTrue(registry.checkSpendingLimit(session1, DAILY_LIMIT, 0));
 
         vm.prank(authorizedContract);

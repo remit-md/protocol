@@ -343,7 +343,7 @@ contract RemitEscrowTest is TestBase {
         vm.prank(payer);
         escrow.releaseEscrow(INV);
 
-        // Total outflow must exactly equal escrowed amount — no wei stolen from other escrows
+        // Total outflow must exactly equal escrowed amount - no wei stolen from other escrows
         uint256 totalOut =
             usdc.balanceOf(split1) + usdc.balanceOf(split2) + usdc.balanceOf(split3) + usdc.balanceOf(feeRecipient);
         assertEq(totalOut, escrowBalBefore, "total outflow must equal escrowed amount");
@@ -616,7 +616,7 @@ contract RemitEscrowTest is TestBase {
         escrow.claimTimeoutPayee(INV);
     }
 
-    /// @dev CRITICAL: Conservation test — claimTimeoutPayee must subtract already-released milestones.
+    /// @dev CRITICAL: Conservation test - claimTimeoutPayee must subtract already-released milestones.
     /// Without the fix, payee would receive milestone payout + full timeout payout > escrowed amount.
     function test_claimTimeoutPayee_subtractsMilestoneReleased() public {
         // Snapshot balances before escrow creation
@@ -681,7 +681,7 @@ contract RemitEscrowTest is TestBase {
         assertEq(feeTimeoutPayout, 700_000, "fee timeout payout = proportional fee on remaining");
     }
 
-    /// @dev Conservation test with ALL milestones released — claimTimeoutPayee should pay nothing extra
+    /// @dev Conservation test with ALL milestones released - claimTimeoutPayee should pay nothing extra
     function test_claimTimeoutPayee_revertsWhenAllMilestonesReleased() public {
         uint96[] memory amounts = new uint96[](2);
         amounts[0] = 50e6;
@@ -706,7 +706,7 @@ contract RemitEscrowTest is TestBase {
         RemitTypes.Escrow memory e = escrow.getEscrow(INV);
         assertEq(uint8(e.status), uint8(RemitTypes.EscrowStatus.Completed));
 
-        // claimTimeoutPayee should revert — escrow already Completed
+        // claimTimeoutPayee should revert - escrow already Completed
         vm.warp(block.timestamp + TIMEOUT_DELTA + 1);
         vm.prank(payee);
         vm.expectRevert(abi.encodeWithSelector(RemitErrors.EscrowFrozen.selector, INV));
@@ -863,7 +863,7 @@ contract RemitEscrowTest is TestBase {
     }
 
     // =========================================================================
-    // createEscrowFor — happy path + conservation
+    // createEscrowFor - happy path + conservation
     // =========================================================================
 
     bytes32 constant INV_FOR = keccak256("invoice-for-001");
@@ -905,7 +905,7 @@ contract RemitEscrowTest is TestBase {
     }
 
     // =========================================================================
-    // releaseEscrowFor — happy path
+    // releaseEscrowFor - happy path
     // =========================================================================
 
     bytes32 constant INV_REL = keccak256("invoice-release-for");
@@ -937,7 +937,7 @@ contract RemitEscrowTest is TestBase {
     }
 
     // =========================================================================
-    // cancelEscrowFor — happy path
+    // cancelEscrowFor - happy path
     // =========================================================================
 
     bytes32 constant INV_CAN = keccak256("invoice-cancel-for");
@@ -963,7 +963,7 @@ contract RemitEscrowTest is TestBase {
     }
 
     // =========================================================================
-    // claimStartFor — happy path
+    // claimStartFor - happy path
     // =========================================================================
 
     bytes32 constant INV_CS = keccak256("invoice-claimstart-for");

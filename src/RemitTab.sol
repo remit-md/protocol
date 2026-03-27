@@ -17,7 +17,7 @@ import {RemitKeyValidator} from "./libraries/RemitKeyValidator.sol";
 
 /// @title RemitTab
 /// @notice Metered payment tabs for AI agent services (off-chain payment channels)
-/// @dev Fund-holding contract. IMMUTABLE — no proxy, no upgrade path.
+/// @dev Fund-holding contract. IMMUTABLE - no proxy, no upgrade path.
 ///      Payer locks USDC once (openTab). Provider charges off-chain (zero gas per call).
 ///      At settlement, provider submits signed cumulative state; contract verifies and settles.
 ///      CEI pattern enforced. ReentrancyGuard on all fund-moving functions.

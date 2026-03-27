@@ -93,7 +93,7 @@ contract RemitRouterTest is Test {
     }
 
     // =========================================================================
-    // payDirect — happy path
+    // payDirect - happy path
     // =========================================================================
 
     function test_payDirect_happyPath() public {
@@ -127,7 +127,7 @@ contract RemitRouterTest is Test {
     }
 
     // =========================================================================
-    // payDirect — reverts
+    // payDirect - reverts
     // =========================================================================
 
     function test_payDirect_revertsOnZeroTo() public {
@@ -155,7 +155,7 @@ contract RemitRouterTest is Test {
     }
 
     // =========================================================================
-    // setters — onlyOwner
+    // setters - onlyOwner
     // =========================================================================
 
     function test_setEscrow_works() public {
@@ -235,7 +235,7 @@ contract RemitRouterTest is Test {
     }
 
     // =========================================================================
-    // payDirect — fee math invariant
+    // payDirect - fee math invariant
     // =========================================================================
 
     function testFuzz_payDirect_feeInvariant(uint96 amount) public {
@@ -257,7 +257,7 @@ contract RemitRouterTest is Test {
     }
 
     // =========================================================================
-    // settleX402 — EIP-3009 helpers
+    // settleX402 - EIP-3009 helpers
     // =========================================================================
 
     bytes32 private constant _TRANSFER_WITH_AUTHORIZATION_TYPEHASH = keccak256(
@@ -313,7 +313,7 @@ contract RemitRouterTest is Test {
     }
 
     // =========================================================================
-    // settleX402 — happy path
+    // settleX402 - happy path
     // =========================================================================
 
     function test_settleX402_happyPath() public {
@@ -358,7 +358,7 @@ contract RemitRouterTest is Test {
 
     function test_settleX402_anyoneCanSubmit() public {
         // A stranger (not the payer, not the server) can submit the settlement.
-        // This is by design — the EIP-3009 auth protects funds, not the submitter identity.
+        // This is by design - the EIP-3009 auth protects funds, not the submitter identity.
         bytes32 nonce = bytes32(uint256(4));
         (address from, uint256 validAfter, uint256 validBefore, uint8 v, bytes32 r, bytes32 s) =
             _setupX402(AMOUNT, nonce);
@@ -370,7 +370,7 @@ contract RemitRouterTest is Test {
     }
 
     // =========================================================================
-    // settleX402 — reverts
+    // settleX402 - reverts
     // =========================================================================
 
     function test_settleX402_revertsOnZeroAmount() public {
@@ -454,13 +454,13 @@ contract RemitRouterTest is Test {
         // Mint more so balance isn't the issue.
         usdc.mint(from, AMOUNT);
 
-        // Replay with same nonce — must revert.
+        // Replay with same nonce - must revert.
         vm.expectRevert("MockUSDC: nonce already used");
         router.settleX402(from, recipient, AMOUNT, validAfter, validBefore, nonce, v, r, s);
     }
 
     // =========================================================================
-    // settleX402 — conservation fuzz
+    // settleX402 - conservation fuzz
     // =========================================================================
 
     function testFuzz_settleX402_feeInvariant(uint96 amount) public {
@@ -485,15 +485,15 @@ contract RemitRouterTest is Test {
     }
 
     // =========================================================================
-    // settleX402 — frame condition (settleX402 doesn't affect payDirect state)
+    // settleX402 - frame condition (settleX402 doesn't affect payDirect state)
     // =========================================================================
 
     function test_settleX402_frameCondition() public {
-        // Do a payDirect first, then settleX402 — ensure payDirect balances are unaffected.
+        // Do a payDirect first, then settleX402 - ensure payDirect balances are unaffected.
         vm.prank(payer);
         router.payDirect(recipient, AMOUNT, bytes32(0));
         uint256 recipientAfterDirect = usdc.balanceOf(recipient);
-        // feeRecipient accrues fees from both paths — only check direct recipient is unaffected.
+        // feeRecipient accrues fees from both paths - only check direct recipient is unaffected.
 
         // Now do an x402 settlement with a different payer.
         bytes32 nonce = bytes32(uint256(99));
@@ -504,12 +504,12 @@ contract RemitRouterTest is Test {
         router.settleX402(x402Payer, x402Recipient, AMOUNT, validAfter, validBefore, nonce, v, r, s);
 
         // payDirect payer's balance is unchanged by x402.
-        // Fee recipient gets fees from both — but the direct recipient's balance should be unchanged.
+        // Fee recipient gets fees from both - but the direct recipient's balance should be unchanged.
         assertEq(usdc.balanceOf(recipient), recipientAfterDirect, "direct recipient unaffected");
     }
 
     // =========================================================================
-    // Relayer authorization — authorize / revoke / isAuthorizedRelayer
+    // Relayer authorization - authorize / revoke / isAuthorizedRelayer
     // =========================================================================
 
     address internal relayer = makeAddr("relayer");
@@ -553,7 +553,7 @@ contract RemitRouterTest is Test {
     }
 
     // =========================================================================
-    // payDirectFor — happy path + conservation
+    // payDirectFor - happy path + conservation
     // =========================================================================
 
     function test_payDirectFor_happyPath() public {
@@ -582,7 +582,7 @@ contract RemitRouterTest is Test {
     }
 
     function test_payDirectFor_revertsForUnauthorizedRelayer() public {
-        // Don't authorize — just call directly
+        // Don't authorize - just call directly
         vm.expectRevert(abi.encodeWithSelector(RemitErrors.Unauthorized.selector, stranger));
         vm.prank(stranger);
         router.payDirectFor(payer, recipient, AMOUNT, bytes32(0));
@@ -609,7 +609,7 @@ contract RemitRouterTest is Test {
     }
 
     // =========================================================================
-    // payDirectFor — conservation fuzz
+    // payDirectFor - conservation fuzz
     // =========================================================================
 
     function testFuzz_payDirectFor_feeInvariant(uint96 amount) public {
@@ -634,7 +634,7 @@ contract RemitRouterTest is Test {
     }
 
     // =========================================================================
-    // payPerRequestFor — happy path
+    // payPerRequestFor - happy path
     // =========================================================================
 
     function test_payPerRequestFor_happyPath() public {

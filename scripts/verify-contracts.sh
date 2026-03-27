@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verify all remit.md contracts on Blockscout (Base Sepolia)
 # Run after deploy-testnet.sh
-# Uses Blockscout (base-sepolia.blockscout.com) — free, no API key required.
+# Uses Blockscout (base-sepolia.blockscout.com) - free, no API key required.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -66,10 +66,10 @@ verify "RemitBounty" "$BOUNTY_ADDRESS" \
 verify "RemitDeposit" "$DEPOSIT_ADDRESS" \
   --constructor-args "$($CAST abi-encode 'constructor(address)' "$USDC_ADDRESS")"
 
-# MockUSDC: constructor() — no args
+# MockUSDC: constructor() - no args
 verify "test/MockUSDC" "$USDC_ADDRESS"
 
-# UUPS proxies — verify implementation, not proxy (proxy is ERC1967)
+# UUPS proxies - verify implementation, not proxy (proxy is ERC1967)
 verify "RemitFeeCalculator" "$FEE_CALCULATOR_ADDRESS"
 verify "RemitRouter" "$ROUTER_ADDRESS"
 

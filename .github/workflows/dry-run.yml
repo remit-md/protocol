@@ -40,7 +40,7 @@ jobs:
 
       - name: Deploy to Anvil fork
         env:
-          # Real Gnosis Safe on Base mainnet — exists on the fork
+          # Real Gnosis Safe on Base mainnet - exists on the fork
           GNOSIS_SAFE: "0x80c203307C4B8be65EafA80492fBe2A8F78CeF24"
           # Use a distinct address to verify fee recipient wiring
           FEE_WALLET: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"

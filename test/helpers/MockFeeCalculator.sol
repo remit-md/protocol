@@ -5,7 +5,7 @@ import {IRemitFeeCalculator} from "../../src/interfaces/IRemitFeeCalculator.sol"
 import {RemitTypes} from "../../src/libraries/RemitTypes.sol";
 
 /// @title MockFeeCalculator
-/// @notice Simple fee calculator for testing — always returns 1% fee
+/// @notice Simple fee calculator for testing - always returns 1% fee
 contract MockFeeCalculator is IRemitFeeCalculator {
     mapping(address => uint256) public monthlyVolume;
 

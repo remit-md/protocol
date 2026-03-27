@@ -12,7 +12,7 @@ import {RemitEvents} from "./libraries/RemitEvents.sol";
 
 /// @title RemitKeyRegistry
 /// @notice Session key delegation registry for Remit agents
-/// @dev Non-fund-holding contract — manages delegation metadata only, no USDC held here.
+/// @dev Non-fund-holding contract - manages delegation metadata only, no USDC held here.
 ///      Operators (master keys) delegate to agent session keys with spending limits, expiry, and revocation.
 ///      Contracts that process payments call isValidDelegation() + checkSpendingLimit() + recordSpend().
 contract RemitKeyRegistry is IRemitKeyRegistry, ReentrancyGuard, EIP712, Ownable {
@@ -213,7 +213,7 @@ contract RemitKeyRegistry is IRemitKeyRegistry, ReentrancyGuard, EIP712, Ownable
         if (!_authorizedContracts[msg.sender]) revert RemitErrors.Unauthorized(msg.sender);
 
         Delegation storage d = _delegations[sessionKey];
-        if (d.masterKey == address(0)) return; // master key (no delegation) — no tracking needed
+        if (d.masterKey == address(0)) return; // master key (no delegation) - no tracking needed
 
         // Reset daily spend at day boundary
         uint64 today = uint64(block.timestamp / 86400);
@@ -296,7 +296,7 @@ contract RemitKeyRegistry is IRemitKeyRegistry, ReentrancyGuard, EIP712, Ownable
         returns (bool ok)
     {
         Delegation storage d = _delegations[sessionKey];
-        if (d.masterKey == address(0)) return true; // master key — no limits
+        if (d.masterKey == address(0)) return true; // master key - no limits
 
         // Check model restriction (bitmask)
         if (d.allowedModelsBitmap != 0xFF && (d.allowedModelsBitmap & (uint8(1) << paymentType)) == 0) {

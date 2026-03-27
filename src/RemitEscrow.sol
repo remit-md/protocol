@@ -18,7 +18,7 @@ import {RemitKeyValidator} from "./libraries/RemitKeyValidator.sol";
 
 /// @title RemitEscrow
 /// @notice Task-based escrow payments for AI agents using USDC
-/// @dev Fund-holding contract. IMMUTABLE — no proxy, no upgrade path.
+/// @dev Fund-holding contract. IMMUTABLE - no proxy, no upgrade path.
 ///      CEI pattern strictly enforced. ReentrancyGuard on all fund-moving functions.
 contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
     using SafeERC20 for IERC20;

@@ -15,24 +15,24 @@ import {RemitTypes} from "../../src/libraries/RemitTypes.sol";
 /// Run with: `halmos --contract RemitSymbolicProofs`
 ///
 /// Design notes for Halmos compatibility:
-///   - Concrete addresses (not makeAddr) — avoids symbolic cheatcode overhead
-///   - Concrete storage keys (not derived from symbolic inputs) — avoids symbolic
+///   - Concrete addresses (not makeAddr) - avoids symbolic cheatcode overhead
+///   - Concrete storage keys (not derived from symbolic inputs) - avoids symbolic
 ///     keccak preimage reasoning which causes solver timeouts
-///   - Tight amount bounds — reduces symbolic path explosion in multi-step flows
+///   - Tight amount bounds - reduces symbolic path explosion in multi-step flows
 ///
 /// Properties proved:
-///   P1 — Fee Correctness:    fee = floor(amount * 100 / 10_000) for all valid amounts
-///   P2 — Fund Conservation:  payeeGain + feeGain = escrowAmount for all releases
-///   P3 — No Double-Settle:   second releaseEscrow always reverts after first succeeds
-///   P4 — Tab Open Locks Exact: openTab transfers exactly limit USDC, no more no less
-///   P5 — Fee Oracle:           MockFeeCalculator returns exactly 1% for all amounts
+///   P1 - Fee Correctness:    fee = floor(amount * 100 / 10_000) for all valid amounts
+///   P2 - Fund Conservation:  payeeGain + feeGain = escrowAmount for all releases
+///   P3 - No Double-Settle:   second releaseEscrow always reverts after first succeeds
+///   P4 - Tab Open Locks Exact: openTab transfers exactly limit USDC, no more no less
+///   P5 - Fee Oracle:           MockFeeCalculator returns exactly 1% for all amounts
 contract RemitSymbolicProofs is Test {
     MockUSDC internal usdc;
     MockFeeCalculator internal feeCalc;
     RemitEscrow internal escrow;
     RemitTab internal tab;
 
-    // Concrete addresses — Halmos handles these better than makeAddr() cheatcodes
+    // Concrete addresses - Halmos handles these better than makeAddr() cheatcodes
     address internal constant PAYER = address(0xAA01);
     address internal constant PAYEE = address(0xBB02);
     address internal constant ADMIN = address(0xCC03);
@@ -49,12 +49,12 @@ contract RemitSymbolicProofs is Test {
     }
 
     // =========================================================================
-    // P1 — Fee Correctness
+    // P1 - Fee Correctness
     //
     // Property: For any valid amount, fee = floor(amount * FEE_RATE_BPS / 10_000)
     //           and fee < amount (fee never exceeds principal).
     //
-    // This is pure arithmetic — Halmos proves it for all uint96 values.
+    // This is pure arithmetic - Halmos proves it for all uint96 values.
     // =========================================================================
 
     /// @notice Fee formula is exact and never exceeds amount
@@ -82,7 +82,7 @@ contract RemitSymbolicProofs is Test {
     }
 
     // =========================================================================
-    // P2 — Fund Conservation
+    // P2 - Fund Conservation
     //
     // Property: When escrow is released, every USDC that entered the contract
     //           exits to either payee or feeRecipient. No funds are lost.
@@ -95,7 +95,7 @@ contract RemitSymbolicProofs is Test {
         vm.assume(amount >= MIN_AMOUNT);
         vm.assume(amount <= 100_000e6); // cap at $100K for symbolic tractability
 
-        // Concrete ID — avoids symbolic keccak preimage reasoning
+        // Concrete ID - avoids symbolic keccak preimage reasoning
         bytes32 inv = keccak256("halmos-conservation");
 
         // Fund payer
@@ -140,10 +140,10 @@ contract RemitSymbolicProofs is Test {
     }
 
     // =========================================================================
-    // P3 — No Double-Settle
+    // P3 - No Double-Settle
     //
     // Property: Releasing an escrow a second time always reverts.
-    //           Once settled, state is terminal — funds cannot be extracted twice.
+    //           Once settled, state is terminal - funds cannot be extracted twice.
     // =========================================================================
 
     /// @notice releaseEscrow is idempotent-safe: second call always reverts
@@ -178,29 +178,29 @@ contract RemitSymbolicProofs is Test {
         // Second release MUST revert (try/catch for Halmos compatibility)
         vm.prank(PAYER);
         try escrow.releaseEscrow(inv) {
-            // If we get here, the second release succeeded — invariant violated
+            // If we get here, the second release succeeded - invariant violated
             assert(false);
         } catch {
-            // Expected: second release reverts — invariant holds
+            // Expected: second release reverts - invariant holds
         }
     }
 
     // =========================================================================
-    // P4 — Tab Open Locks Exact Amount
+    // P4 - Tab Open Locks Exact Amount
     //
     // Property: openTab transfers exactly `limit` USDC from payer to contract.
     //           No more, no less. The payer's balance decreases by exactly limit
     //           and the contract's balance increases by exactly limit.
     // =========================================================================
 
-    /// @notice openTab locks exactly limit USDC — no over- or under-transfer
+    /// @notice openTab locks exactly limit USDC - no over- or under-transfer
     function check_tabOpenLocksExactAmount(uint96 limit, uint64 perUnit) public {
         vm.assume(limit >= MIN_AMOUNT);
         vm.assume(limit <= 10_000e6); // $10k cap
         vm.assume(perUnit >= MIN_AMOUNT);
         vm.assume(uint256(perUnit) <= uint256(limit));
 
-        // Concrete ID — the old version derived tabId from symbolic limit+perUnit,
+        // Concrete ID - the old version derived tabId from symbolic limit+perUnit,
         // forcing Halmos to reason about symbolic keccak preimages (causes FAIL)
         bytes32 tabId = keccak256("halmos-tab");
 
@@ -222,7 +222,7 @@ contract RemitSymbolicProofs is Test {
     }
 
     // =========================================================================
-    // P5 — Fee Rate Monotonicity
+    // P5 - Fee Rate Monotonicity
     //
     // Property: Fee calculated by MockFeeCalculator is always
     //           floor(amount * 100 / 10_000), never more, never less.

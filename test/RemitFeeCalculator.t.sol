@@ -60,7 +60,7 @@ contract RemitFeeCalculatorTest is Test {
     }
 
     // =========================================================================
-    // calculateFee — standard rate (below cliff)
+    // calculateFee - standard rate (below cliff)
     // =========================================================================
 
     function test_calculateFee_standardRate_zeroVolume() public view {
@@ -75,7 +75,7 @@ contract RemitFeeCalculatorTest is Test {
         vm.prank(caller);
         calc.recordTransaction(wallet, 5_000e6);
 
-        uint96 amount = 500e6; // $500 — stays below $10k
+        uint96 amount = 500e6; // $500 - stays below $10k
         uint96 fee = calc.calculateFee(wallet, amount);
         assertEq(fee, (uint256(amount) * STANDARD) / 10_000);
     }
@@ -91,7 +91,7 @@ contract RemitFeeCalculatorTest is Test {
     }
 
     // =========================================================================
-    // calculateFee — preferred rate (above cliff)
+    // calculateFee - preferred rate (above cliff)
     // =========================================================================
 
     function test_calculateFee_preferredRate_aboveThreshold() public {
@@ -105,7 +105,7 @@ contract RemitFeeCalculatorTest is Test {
     }
 
     // =========================================================================
-    // calculateFee — cliff behavior (no marginal split)
+    // calculateFee - cliff behavior (no marginal split)
     // =========================================================================
 
     function test_calculateFee_cliff_transactionCrossingThreshold() public {
@@ -145,7 +145,7 @@ contract RemitFeeCalculatorTest is Test {
     }
 
     // =========================================================================
-    // calculateFee — does not write state (view function)
+    // calculateFee - does not write state (view function)
     // =========================================================================
 
     function test_calculateFee_doesNotChangeVolume() public {
@@ -216,7 +216,7 @@ contract RemitFeeCalculatorTest is Test {
         // Warp to April 1, 2026
         vm.warp(1775001600);
 
-        // Record in new month — should start fresh.
+        // Record in new month - should start fresh.
         vm.prank(caller);
         calc.recordTransaction(wallet, 500e6);
 

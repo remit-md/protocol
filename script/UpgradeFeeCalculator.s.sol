@@ -12,7 +12,7 @@ import {RemitFeeCalculator} from "../src/RemitFeeCalculator.sol";
 ///      forge script script/UpgradeFeeCalculator.s.sol \
 ///        --broadcast --rpc-url $RPC_URL --private-key $DEPLOYER_PRIVATE_KEY
 ///
-///      Storage layout is unchanged — only function logic + a new pure helper.
+///      Storage layout is unchanged - only function logic + a new pure helper.
 contract UpgradeFeeCalculator is Script {
     /// @dev Current FeeCalculator proxy address (Base Sepolia).
     address constant FEE_CALC_PROXY = 0x274F4B69F4aa102ABA6ad8bD8dE30d4733306C25;

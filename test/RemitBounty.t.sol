@@ -142,7 +142,7 @@ contract RemitBountyTest is Test {
         vm.prank(submitter);
         bounty.submitBounty(BOUNTY_ID, EVIDENCE);
 
-        // Status is now Claimed — second submission blocked
+        // Status is now Claimed - second submission blocked
         vm.prank(submitter2);
         vm.expectRevert(abi.encodeWithSelector(RemitErrors.BountyClaimed.selector, BOUNTY_ID));
         bounty.submitBounty(BOUNTY_ID, EVIDENCE_2);
@@ -163,7 +163,7 @@ contract RemitBountyTest is Test {
         vm.prank(submitter);
         bounty.submitBounty(BOUNTY_ID, EVIDENCE);
 
-        // Reject to reset to Open — immediate, no dispute window
+        // Reject to reset to Open - immediate, no dispute window
         vm.prank(poster);
         bounty.rejectSubmission(BOUNTY_ID, submitter, "insufficient work");
 
@@ -275,7 +275,7 @@ contract RemitBountyTest is Test {
     function test_rejectSubmission_andResubmit() public {
         _postBounty(BOND, 3);
 
-        // First submitter rejected — bond returned, bounty re-opens immediately
+        // First submitter rejected - bond returned, bounty re-opens immediately
         vm.prank(submitter);
         bounty.submitBounty(BOUNTY_ID, EVIDENCE);
         vm.prank(poster);

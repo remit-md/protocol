@@ -54,7 +54,7 @@ contract RemitStreamFuzzTest is Test {
     }
 
     // =========================================================================
-    // Fuzz: close invariant — all funds accounted for
+    // Fuzz: close invariant - all funds accounted for
     // =========================================================================
 
     /// @dev After closeStream: payeeGets + refund + fee == maxTotal (contract holds 0)
@@ -112,7 +112,7 @@ contract RemitStreamFuzzTest is Test {
     }
 
     // =========================================================================
-    // Fuzz: withdraw + close — all funds accounted for
+    // Fuzz: withdraw + close - all funds accounted for
     // =========================================================================
 
     /// @dev With a mid-stream withdrawal, the invariant still holds at close

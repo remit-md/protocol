@@ -22,7 +22,7 @@ The five contracts that hold user funds are **non-upgradeable**:
 | `RemitBounty` | Post-and-award bounty pools |
 | `RemitDeposit` | Locked collateral deposits |
 
-Immutability guarantees that once deployed, fund logic cannot be altered — not even
+Immutability guarantees that once deployed, fund logic cannot be altered - not even
 by the protocol owner.
 
 ### Upgradeable Contracts (UUPS Proxies)
@@ -51,7 +51,7 @@ Upgrades require the `owner` address (multi-sig after mainnet launch).
 All state-changing functions that interact with external contracts or move funds use:
 
 - **`nonReentrant`** (OpenZeppelin ReentrancyGuard) on every external fund-moving function
-- **CEI pattern** (Checks-Effects-Interactions) — state changes committed before external calls
+- **CEI pattern** (Checks-Effects-Interactions) - state changes committed before external calls
 - **`SafeERC20`** for all USDC transfers (reverts on failed transfers, handles non-standard ERC20s)
 
 ### Access Control
@@ -96,7 +96,7 @@ Two internal security reviews were conducted before external audit engagement.
 
 Findings: **0 critical, 0 high, 0 medium**
 
-Original medium finding (PRNG in `RemitArbitration`) is no longer applicable — contract was removed.
+Original medium finding (PRNG in `RemitArbitration`) is no longer applicable - contract was removed.
 
 ### V2 Internal Review (2026-03-09)
 
@@ -118,8 +118,8 @@ Focused on access control gaps and code quality. Findings resolved:
 
 | Severity | Raw | False Positives | Real | Status |
 |----------|-----|-----------------|------|--------|
-| High | 2 | 0 | 2 | N/A — both in `RemitArbitration` (removed) |
-| Medium | ~8 | ~7 | 1 | N/A — in `OnrampVaultFactory` (removed) |
+| High | 2 | 0 | 2 | N/A - both in `RemitArbitration` (removed) |
+| Medium | ~8 | ~7 | 1 | N/A - in `OnrampVaultFactory` (removed) |
 | Low | ~20 | ~20 | 0 | All false positives |
 | Info | ~50 | ~50 | 0 | Standard patterns |
 
@@ -166,7 +166,7 @@ Three invariant test suites (128,000 calls each) verify no fund leakage:
 **Result:** 0 critical, 0 high advisories
 
 One medium advisory (`rsa` crate via `sqlx-mysql`, RUSTSEC-2023-0071) has no available fix and
-is accepted — the server does not use MySQL, making it unexploitable in this context.
+is accepted - the server does not use MySQL, making it unexploitable in this context.
 
 ---
 

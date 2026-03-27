@@ -27,7 +27,7 @@ Based on the contract implementations and comparable Solidity patterns, estimate
 
 ## Storage Packing Notes
 
-All contracts use `uint96` for USDC amounts (max ~79.2 billion USDC — exceeds total supply).
+All contracts use `uint96` for USDC amounts (max ~79.2 billion USDC - exceeds total supply).
 Packed structs reduce SLOAD/SSTORE costs:
 
 **Escrow struct** (packed into 4 slots):
@@ -59,7 +59,7 @@ grep -A 50 "RemitEscrow" gas-report.txt
 
 ## Optimization Notes
 
-- `via_ir = false` in foundry.toml — enable for production to reduce gas ~5-10%
-- `optimizer_runs = 200` — optimal for deployment cost vs call cost balance
+- `via_ir = false` in foundry.toml - enable for production to reduce gas ~5-10%
+- `optimizer_runs = 200` - optimal for deployment cost vs call cost balance
 - All external calls use `SafeERC20.safeTransferFrom` (adds ~200 gas vs direct call)
 - ReentrancyGuard: ~2,300 gas overhead per guarded function (two SSTORE operations)

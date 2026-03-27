@@ -28,7 +28,7 @@ library RemitKeyValidator {
         if (address(keyRegistry) == address(0)) return; // key management not deployed
 
         IRemitKeyRegistry.Delegation memory d = keyRegistry.getDelegation(signer);
-        if (d.masterKey == address(0)) return; // not a session key — master key, no limits
+        if (d.masterKey == address(0)) return; // not a session key - master key, no limits
 
         // Session key: must be valid (not revoked, not expired, not just grace-period)
         if (!keyRegistry.isValidDelegation(signer)) {
@@ -40,7 +40,7 @@ library RemitKeyValidator {
             revert RemitErrors.DelegationLimitExceeded(signer, amount, d.spendingLimit);
         }
 
-        // Record spending (modifies state — must be called by authorized contract)
+        // Record spending (modifies state - must be called by authorized contract)
         keyRegistry.recordSpend(signer, amount);
     }
 }

@@ -81,7 +81,7 @@ contract DeployMainnet is Script {
         _deployKeyRegistry(deployer);
 
         // Step 2: Deploy fund-holding contracts with admin (Safe) as protocolAdmin.
-        // protocolAdmin is immutable — must be the Safe from the start.
+        // protocolAdmin is immutable - must be the Safe from the start.
         _deployFundHolding(admin, feeRecipient);
 
         // Step 3: Configure authorizations (requires deployer = owner).

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy-local.sh — Full local development environment setup
+# deploy-local.sh - Full local development environment setup
 # Starts Docker services, applies migrations, deploys contracts to Anvil
 
 set -euo pipefail
@@ -22,7 +22,7 @@ die()  { echo -e "${RED}[deploy-local] ERROR:${NC} $*" >&2; exit 1; }
 if [ -f "$ENV_FILE" ]; then
     set -a; source "$ENV_FILE"; set +a
 else
-    warn ".env not found — copying from .env.example"
+    warn ".env not found - copying from .env.example"
     cp "$ROOT_DIR/.env.example" "$ENV_FILE"
     set -a; source "$ENV_FILE"; set +a
 fi

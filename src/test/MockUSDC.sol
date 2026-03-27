@@ -5,7 +5,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /// @title MockUSDC
 /// @notice Minimal ERC-20 with EIP-3009 transferWithAuthorization and EIP-2612 permit for local testing.
-/// @dev Anyone can mint — local Anvil only.
+/// @dev Anyone can mint - local Anvil only.
 contract MockUSDC is ERC20 {
     // EIP-3009 state
     mapping(address => mapping(bytes32 => bool)) private _authorizationStates;
@@ -26,7 +26,7 @@ contract MockUSDC is ERC20 {
         return 6;
     }
 
-    /// @notice Mint USDC to any address (no access control — test only)
+    /// @notice Mint USDC to any address (no access control - test only)
     function mint(address to, uint256 amount) public {
         _mint(to, amount);
     }

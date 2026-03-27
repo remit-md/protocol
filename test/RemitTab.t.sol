@@ -103,7 +103,7 @@ contract RemitTabTest is Test {
     }
 
     // =========================================================================
-    // closeTab — happy paths
+    // closeTab - happy paths
     // =========================================================================
 
     function test_closeTab_byPayer_fullCharge() public {
@@ -181,7 +181,7 @@ contract RemitTabTest is Test {
     }
 
     // =========================================================================
-    // closeTab — reverts
+    // closeTab - reverts
     // =========================================================================
 
     function test_closeTab_revertsNotFound() public {

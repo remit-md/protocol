@@ -45,11 +45,11 @@ contract IntegrationTest is TestBase {
     }
 
     // =========================================================================
-    // payDirect — real fee calculator
+    // payDirect - real fee calculator
     // =========================================================================
 
     function test_payDirect_standardRate() public {
-        uint96 amount = 1_000e6; // $1,000 — below threshold
+        uint96 amount = 1_000e6; // $1,000 - below threshold
         uint96 expectedFee = uint96((uint256(amount) * 100) / 10_000); // 1%
 
         // Record balances before (payee has existing funds from TestBase setUp)
@@ -71,7 +71,7 @@ contract IntegrationTest is TestBase {
         vm.prank(admin);
         realFeeCalc.revokeCaller(address(this));
 
-        // Now payDirect $1,000 — would cross $10k threshold.
+        // Now payDirect $1,000 - would cross $10k threshold.
         // Cliff: volume ($9,500) < threshold → entire $1,000 at standard rate (1%) = $10.
         uint96 amount = 1_000e6;
         uint96 expectedFee = uint96((uint256(amount) * 100) / 10_000); // $10.00
@@ -104,12 +104,12 @@ contract IntegrationTest is TestBase {
     // =========================================================================
 
     function test_volume_accumulatesAcrossContracts() public {
-        // Pay via router — volume recorded.
+        // Pay via router - volume recorded.
         vm.prank(payer);
         router.payDirect(payee, 5_000e6, bytes32(0));
         assertEq(realFeeCalc.getMonthlyVolume(payer), 5_000e6);
 
-        // Open + close an escrow — volume recorded on release.
+        // Open + close an escrow - volume recorded on release.
         // Fund payer with additional USDC.
         usdc.mint(payer, 5_000e6 + 100e6); // amount + fee buffer
         vm.prank(payer);
@@ -173,7 +173,7 @@ contract IntegrationTest is TestBase {
 
         assertEq(realFeeCalc.getFeeRate(payer), RemitTypes.FEE_RATE_PREFERRED_BPS);
 
-        // Advance 35 days — guaranteed to cross a calendar month boundary.
+        // Advance 35 days - guaranteed to cross a calendar month boundary.
         vm.warp(block.timestamp + 35 days);
 
         assertEq(realFeeCalc.getFeeRate(payer), RemitTypes.FEE_RATE_BPS);
@@ -228,7 +228,7 @@ contract IntegrationTest is TestBase {
     // =========================================================================
 
     function test_tab_feeTierApplied() public {
-        // Open a tab — this doesn't record volume yet (no settlement).
+        // Open a tab - this doesn't record volume yet (no settlement).
         vm.prank(payer);
         realTab.openTab(TAB_ID, payee, AMOUNT, 1e6, uint64(block.timestamp + 1 days));
 
@@ -254,7 +254,7 @@ contract IntegrationTest is TestBase {
         returns (bytes memory)
     {
         // payeeKey is set in TestBase from the deterministic key.
-        // We need to get the payee key — use vm.sign with the payee private key.
+        // We need to get the payee key - use vm.sign with the payee private key.
         bytes32 domainSep = realTab.domainSeparator();
         bytes32 structHash = keccak256(abi.encode(TAB_CHARGE_TYPEHASH, tabId, totalCharged, callCount));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));

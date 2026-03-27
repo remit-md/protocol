@@ -9,7 +9,7 @@ import {RemitTypes} from "../src/libraries/RemitTypes.sol";
 
 /// @title RemitDepositFuzzTest
 /// @notice Fuzz/property tests for RemitDeposit.sol
-/// @dev No fee on deposits — all transfers must be exact.
+/// @dev No fee on deposits - all transfers must be exact.
 contract RemitDepositFuzzTest is Test {
     MockUSDC internal usdc;
     RemitDeposit internal dep;
@@ -29,7 +29,7 @@ contract RemitDepositFuzzTest is Test {
     }
 
     // =========================================================================
-    // Fuzz: returnDeposit — depositor gets back exact amount (no fee)
+    // Fuzz: returnDeposit - depositor gets back exact amount (no fee)
     // =========================================================================
 
     /// @dev Deposit has no fee. Provider returning a deposit means depositor
@@ -53,7 +53,7 @@ contract RemitDepositFuzzTest is Test {
     }
 
     // =========================================================================
-    // Fuzz: forfeitDeposit — provider gets exact amount (no fee)
+    // Fuzz: forfeitDeposit - provider gets exact amount (no fee)
     // =========================================================================
 
     /// @dev When the depositor defaults, provider claims by calling forfeitDeposit.
@@ -76,7 +76,7 @@ contract RemitDepositFuzzTest is Test {
     }
 
     // =========================================================================
-    // Fuzz: claimExpiredDeposit — depositor reclaims after expiry
+    // Fuzz: claimExpiredDeposit - depositor reclaims after expiry
     // =========================================================================
 
     /// @dev Depositor can reclaim after expiry. Gets back exact amount.
@@ -128,7 +128,7 @@ contract RemitDepositFuzzTest is Test {
         // Contract holds exactly amount1 + amount2
         assertEq(usdc.balanceOf(address(dep)), uint256(amount1) + uint256(amount2));
 
-        // Forfeit deposit 1 (provider claims) — deposit 2 intact
+        // Forfeit deposit 1 (provider claims) - deposit 2 intact
         vm.prank(provider);
         dep.forfeitDeposit(id1);
         assertEq(usdc.balanceOf(address(dep)), amount2, "deposit 2 must be intact after deposit 1 forfeit");
@@ -140,7 +140,7 @@ contract RemitDepositFuzzTest is Test {
     }
 
     // =========================================================================
-    // Fuzz: lockDeposit — any valid amount stores correctly
+    // Fuzz: lockDeposit - any valid amount stores correctly
     // =========================================================================
 
     /// @dev Any amount in [MIN_AMOUNT, uint96.max] stores without overflow.

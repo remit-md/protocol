@@ -1,6 +1,6 @@
 # remit.md / protocol
 
-Solidity smart contracts for the [remit.md](https://remit.md) payment protocol — escrow, tabs, streams, bounties on EVM L2s.
+Solidity smart contracts for the [remit.md](https://remit.md) payment protocol - escrow, tabs, streams, bounties on EVM L2s.
 
 ## Contracts
 
@@ -18,9 +18,9 @@ All fund-holding contracts are immutable (no proxy). Reentrancy guards and CEI p
 
 ## Also included
 
-- **`remit.md`** — The full protocol specification (agent-readable)
-- **`shared/`** — Source-of-truth type definitions, error codes, events, and OpenAPI spec
-- **`scripts/`** — Deploy, verify, and codegen tooling
+- **`remit.md`** - The full protocol specification (agent-readable)
+- **`shared/`** - Source-of-truth type definitions, error codes, events, and OpenAPI spec
+- **`scripts/`** - Deploy, verify, and codegen tooling
 
 ## Setup
 

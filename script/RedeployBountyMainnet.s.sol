@@ -31,7 +31,7 @@ contract RedeployBountyMainnet is Script {
 
     function run() external {
         address deployer = msg.sender;
-        // Gnosis Safe is the protocolAdmin — required for relayer management
+        // Gnosis Safe is the protocolAdmin - required for relayer management
         address admin = vm.envOr("GNOSIS_SAFE", deployer);
         address feeRecipient = vm.envOr("FEE_WALLET", admin);
 
@@ -42,15 +42,15 @@ contract RedeployBountyMainnet is Script {
 
         vm.startBroadcast();
 
-        // 1. Deploy new Bounty — Safe is protocolAdmin, NOT the deployer
+        // 1. Deploy new Bounty - Safe is protocolAdmin, NOT the deployer
         RemitBounty newBounty = new RemitBounty(USDC, FEE_CALC, feeRecipient, admin, KEY_REGISTRY);
         console2.log("New Bounty:", address(newBounty));
 
         // 2. Authorize deployer as relayer (deployer = SERVER_SIGNING_KEY on production)
         //    This works because protocolAdmin = admin, but the bounty was JUST created so
-        //    the deployer is msg.sender in the constructor context. Wait — protocolAdmin
+        //    the deployer is msg.sender in the constructor context. Wait - protocolAdmin
         //    is the Safe, so only the Safe can authorizeRelayer. We need the Safe to do this.
-        //    SKIP — must be done from Safe UI.
+        //    SKIP - must be done from Safe UI.
 
         vm.stopBroadcast();
 
