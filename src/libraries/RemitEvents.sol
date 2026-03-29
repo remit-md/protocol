@@ -31,11 +31,7 @@ library RemitEvents {
         uint64 expiry
     );
 
-    event TabCharged(bytes32 indexed tabId, uint96 amount, uint96 totalCharged, uint96 remaining);
-
     event TabClosed(bytes32 indexed tabId, uint96 totalCharged, uint96 refund, uint96 fee);
-
-    event TabDepleted(bytes32 indexed tabId, uint96 totalCharged);
 
     // === Stream Events ===
     event StreamOpened(
@@ -45,15 +41,6 @@ library RemitEvents {
     event StreamClosed(bytes32 indexed streamId, uint96 totalStreamed, uint96 refund, uint96 fee);
 
     event StreamWithdrawal(bytes32 indexed streamId, address indexed payee, uint96 amount);
-
-    // === Subscription Events ===
-    event SubscriptionCreated(
-        bytes32 indexed subId, address indexed payer, address indexed provider, uint96 amount, uint64 interval
-    );
-
-    event SubscriptionCharged(bytes32 indexed subId, uint96 amount, uint64 nextChargeAt);
-
-    event SubscriptionCancelled(bytes32 indexed subId, address indexed canceller);
 
     // === Bounty Events ===
     event BountyPosted(
@@ -106,12 +93,6 @@ library RemitEvents {
 
     /// @notice Emitted when a session key is revoked
     event KeyRevoked(address indexed masterKey, address indexed sessionKey);
-
-    /// @notice Emitted when a session key is nearing expiry (off-chain indexer should warn operator)
-    /// @param masterKey The operator wallet that owns the delegation
-    /// @param sessionKey The session key about to expire
-    /// @param expiresAt Unix timestamp when the delegation expires
-    event KeyExpiring(address indexed masterKey, address indexed sessionKey, uint64 expiresAt);
 
     /// @notice V2: Emitted when a pay-per-request payment is made (endpoint metadata attached)
     event PayPerRequest(address indexed payer, address indexed payee, uint96 amount, uint96 fee, string endpoint);

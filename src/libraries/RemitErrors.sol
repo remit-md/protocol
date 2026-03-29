@@ -34,6 +34,9 @@ library RemitErrors {
 
     // Milestone
     error MilestoneEscrowBlocked(bytes32 invoiceId);
+    error MilestoneSumMismatch(uint96 milestoneSum, uint96 escrowAmount);
+    error SplitSumMismatch(uint96 splitSum, uint96 escrowAmount);
+    error MilestoneNotFound(bytes32 invoiceId, uint8 index);
 
     // Cancellation
     error CancelBlockedClaimStart(bytes32 invoiceId);

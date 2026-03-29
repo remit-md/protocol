@@ -10,7 +10,7 @@ via_ir = true
 ffi = false
 
 [profile.default.fuzz]
-runs = 256
+runs = 1024
 max_test_rejects = 65536
 
 # Script profile: enable via-IR to avoid stack-too-deep in deploy scripts
