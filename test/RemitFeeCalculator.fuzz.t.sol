@@ -123,9 +123,7 @@ contract RemitFeeCalculatorFuzzTest is Test {
         }
 
         uint96 fee = calc.calculateFee(w, amount);
-        uint96 rate = volume >= RemitTypes.FEE_THRESHOLD
-            ? RemitTypes.FEE_RATE_PREFERRED_BPS
-            : RemitTypes.FEE_RATE_BPS;
+        uint96 rate = volume >= RemitTypes.FEE_THRESHOLD ? RemitTypes.FEE_RATE_PREFERRED_BPS : RemitTypes.FEE_RATE_BPS;
 
         assertEq(fee, uint96((uint256(amount) * rate) / 10_000));
     }

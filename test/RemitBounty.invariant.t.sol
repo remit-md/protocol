@@ -171,9 +171,7 @@ contract BountyExtendedInvariantTest is Test {
 
     /// @notice INV-B1: Contract balance equals ghost_locked (bounties + bonds held).
     function invariant_contractBalanceEqualsGhostLocked() public view {
-        assertEq(
-            usdc.balanceOf(address(bountyContract)), handler.ghost_locked(), "bounty: balance != ghost_locked"
-        );
+        assertEq(usdc.balanceOf(address(bountyContract)), handler.ghost_locked(), "bounty: balance != ghost_locked");
     }
 
     /// @notice INV-B2: Contract balance is never negative (sanity).
