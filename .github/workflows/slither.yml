@@ -22,7 +22,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
         with:
-          version: nightly-2025-02-20
+          version: nightly-c07d504b4ae67754584f4e05ff0c547a43c50f7b
 
       - name: Build (required for Slither)
         run: forge build --build-info
