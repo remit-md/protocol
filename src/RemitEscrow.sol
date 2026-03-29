@@ -122,7 +122,7 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
                 // V2: Enforce per-milestone timeout floor
                 _enforceTimeoutFloor(milestones[i].amount, milestones[i].timeout);
             }
-            if (milestoneSum != amount) revert RemitErrors.BelowMinimum(milestoneSum, amount);
+            if (milestoneSum != amount) revert RemitErrors.MilestoneSumMismatch(milestoneSum, amount);
         }
 
         // Validate split amounts sum to total
@@ -132,7 +132,7 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
                 if (splits[i].payee == address(0)) revert RemitErrors.ZeroAddress();
                 splitSum += splits[i].amount;
             }
-            if (splitSum != amount) revert RemitErrors.BelowMinimum(splitSum, amount);
+            if (splitSum != amount) revert RemitErrors.SplitSumMismatch(splitSum, amount);
         }
 
         uint96 fee = feeCalculator.calculateFee(msg.sender, amount);
@@ -215,7 +215,7 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
                 milestoneSum += milestones[i].amount;
                 _enforceTimeoutFloor(milestones[i].amount, milestones[i].timeout);
             }
-            if (milestoneSum != amount) revert RemitErrors.BelowMinimum(milestoneSum, amount);
+            if (milestoneSum != amount) revert RemitErrors.MilestoneSumMismatch(milestoneSum, amount);
         }
 
         if (splits.length > 0) {
@@ -224,7 +224,7 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
                 if (splits[i].payee == address(0)) revert RemitErrors.ZeroAddress();
                 splitSum += splits[i].amount;
             }
-            if (splitSum != amount) revert RemitErrors.BelowMinimum(splitSum, amount);
+            if (splitSum != amount) revert RemitErrors.SplitSumMismatch(splitSum, amount);
         }
 
         uint96 fee = feeCalculator.calculateFee(payer, amount);
@@ -351,7 +351,7 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
 
         // Validate milestone index if milestone escrow
         if (escrow.milestoneCount > 0 && milestoneIndex >= escrow.milestoneCount) {
-            revert RemitErrors.EscrowNotFound(invoiceId);
+            revert RemitErrors.MilestoneNotFound(invoiceId, milestoneIndex);
         }
 
         // --- Effects ---
@@ -425,7 +425,7 @@ contract RemitEscrow is IRemitEscrow, ReentrancyGuard, Pausable, EIP712 {
 
         if (escrow.payer != msg.sender) revert RemitErrors.Unauthorized(msg.sender);
         if (escrow.status != RemitTypes.EscrowStatus.Active) revert RemitErrors.EscrowFrozen(invoiceId);
-        if (milestoneIndex >= escrow.milestoneCount) revert RemitErrors.EscrowNotFound(invoiceId);
+        if (milestoneIndex >= escrow.milestoneCount) revert RemitErrors.MilestoneNotFound(invoiceId, milestoneIndex);
 
         RemitTypes.Milestone storage milestone = _milestones[invoiceId][milestoneIndex];
         if (milestone.status != RemitTypes.MilestoneStatus.Submitted) revert RemitErrors.EscrowFrozen(invoiceId);

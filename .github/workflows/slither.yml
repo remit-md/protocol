@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  security-events: write
 
 jobs:
   slither:
@@ -21,14 +22,26 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
         with:
-          version: stable
+          version: nightly-c07d504b4ae67754584f4e05ff0c547a43c50f7b
 
       - name: Build (required for Slither)
         run: forge build --build-info
 
       - name: Run Slither
         uses: crytic/slither-action@6918a2fdd17e52e5ae3cda55f1b57ca91b82a15a # v0.4.0
+        id: slither
+        continue-on-error: true
         with:
           target: src/
-          slither-args: --filter-paths "test|lib|script" --no-fail-pedantic
-          fail-on: none
+          slither-args: --filter-paths "test|lib|script" --no-fail-pedantic --sarif results.sarif
+          fail-on: high
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: results.sarif
+
+      - name: Fail if Slither found high-severity issues
+        if: steps.slither.outcome == 'failure'
+        run: exit 1

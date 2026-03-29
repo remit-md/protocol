@@ -23,9 +23,7 @@ library RemitTypes {
     /// @notice Tab status
     enum TabStatus {
         Open, // 0: active, charges allowed
-        Depleted, // 1: funds exhausted
-        Closed, // 2: closed by either party
-        Expired // 3: past expiry time
+        Closed // 1: closed by either party
     }
 
     /// @notice Stream status

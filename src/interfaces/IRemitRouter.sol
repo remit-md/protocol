@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 /// @title IRemitRouter
 /// @notice Routes to current contract versions. Entry point for agents.
-/// @dev Peripheral contract. UPGRADEABLE (UUPS + timelock).
+/// @dev Peripheral contract. UPGRADEABLE (UUPS).
 interface IRemitRouter {
     /// @notice Get the current escrow contract address
     function escrow() external view returns (address);
@@ -97,7 +97,7 @@ interface IRemitRouter {
         bytes32 s
     ) external;
 
-    /// @notice Update contract addresses (admin only, timelocked)
+    /// @notice Update contract addresses (admin only)
     function setEscrow(address newEscrow) external;
     function setTab(address newTab) external;
     function setStream(address newStream) external;
